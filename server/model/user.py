@@ -7,10 +7,15 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True)
     username: str = Field(index=True)
     passwordhash: str
+    #is_verified: bool = False
 
 class CreateUserRequest(BaseModel):
     email: str
     username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
     password: str
 
 class UserInfo(BaseModel):
