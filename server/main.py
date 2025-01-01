@@ -1,14 +1,15 @@
 import hashlib
 import os
 from contextlib import asynccontextmanager
-from typing import Union
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
-
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-
-from model.user import User, CreateUserRequest, UserInfo
+from model.user import User, CreateUserRequest, UserInfo, LoginRequest
 from base64 import b64encode, b64decode
+import jwt
+from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
+import time
 
 sqlite_url = f"sqlite:///data/voizchat.db"
 
@@ -49,16 +50,53 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@app.post("/users/")
-def create_user(user_request: CreateUserRequest, session: SessionDep) -> int:
+
+origins = [
+    "http://localhost:5173",  # Vite's default dev server
+    "http://127.0.0.1:5173"  # Alternative localhost
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+#load public and private keys
+with open("public_key.pem", "r") as public_file:
+    public_key = public_file.read()
+
+with open("private_key.pem", "r") as private_file:
+    private_key = private_file.read()
+@app.post("/api/users/register")
+
+def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
     user = User(email=user_request.email, username=user_request.username)
     user.passwordhash = hash_password(user_request.password)
     session.add(user)
     session.commit()
     session.refresh(user)
-    return user.id
+    one_week_in_seconds = 60*60*24*7
+    expiration = int(time.time()) + one_week_in_seconds
+    payload = {"sub": user.id, "exp": expiration}
+    token = jwt.encode(payload, private_key, algorithm="EdDSA")
+    return jsonable_encoder({"token": token})
 
-@app.get("/users/")
+
+@app.post("/api/users/login")
+def login_user(user_request: LoginRequest, session: SessionDep) -> dict[str, str]:
+    user = session.exec(select(User).where(User.email == user_request.email)).first()
+    if not user or not verify_password_hash(user.passwordhash, user_request.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    one_week_in_seconds = 60*60*24*7
+    expiration = int(time.time()) + one_week_in_seconds
+    payload = {"sub": user.id, "exp": expiration}
+    token = jwt.encode(payload, private_key, algorithm="EdDSA")
+    return jsonable_encoder({"token": token})
+
+@app.get("/api/users/")
 def read_users(
     session: SessionDep,
     offset: int = 0,
@@ -69,14 +107,14 @@ def read_users(
              for user in session.exec(select(User).offset(offset).limit(limit)).all()
     ]
 
-@app.get("/users/{user_id}")
+@app.get("/api/users/{user_id}")
 def read_user(user_id: int, session: SessionDep) -> UserInfo:
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserInfo(id=user.id, email=user.email, username=user.username)
 
-@app.delete("/user/{user_id}")
+@app.delete("/api/user/{user_id}")
 def delete_user(user_id: int, session: SessionDep):
     user = session.get(User, user_id)
     if not user:
@@ -84,13 +122,3 @@ def delete_user(user_id: int, session: SessionDep):
     session.delete(user)
     session.commit()
     return {"ok": True}
-
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
