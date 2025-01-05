@@ -1,0 +1,41 @@
+﻿name: voizchat
+
+services:
+  server:
+    image: pixhy/voizchat:server
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////var/opt/data/voizchat.db
+      AUTH_JWT_PUBKEY: ${AUTH_JWT_PUBKEY}
+      AUTH_JWT_PRIVKEY: ${AUTH_JWT_PRIVKEY}
+      WEBCLIENT_BASE_URL: "http://localhost:3000"
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    volumes:
+      - server-data:/var/opt/data
+
+  webclient:
+    image: pixhy/voizchat:webclient
+    build:
+      context: ./webclient
+    environment:
+      VITE_API_URL: "http://localhost:3000/api"
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    networks:
+      - app-network
+
+
+volumes:
+  server-data:
+
+
+networks:
+  app-network:
+    driver: bridge
