@@ -2,23 +2,25 @@ import hashlib
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated
-from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from sqlmodel import Session, SQLModel, create_engine, select
 from model.user import User, CreateUserRequest, UserInfo, LoginRequest
 from base64 import b64encode, b64decode
 import jwt
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
+from email_service import send_verification_email
 
-sqlite_url = f"sqlite:///data/voizchat.db"
+sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
+print(f"Using database: {sqlite_url}")
 engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
 def hash_password(password: str):
     salt = os.urandom(32)
-    hash = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
-    return f"1${b64encode(salt).decode('utf-8')}${b64encode(hash).decode('utf-8')}"
+    passwordhash = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
+    return f"1${b64encode(salt).decode('utf-8')}${b64encode(passwordhash).decode('utf-8')}"
 
 def verify_password_hash(password_hash, password):
     version, salt, expected_hash = password_hash.split('$')
@@ -41,8 +43,9 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     # Startup
+    hash(_app)
     create_db_and_tables()
     yield
     # Cleanup
@@ -64,25 +67,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#load public and private keys
-with open("public_key.pem", "r") as public_file:
-    public_key = public_file.read()
 
-with open("private_key.pem", "r") as private_file:
-    private_key = private_file.read()
+jwt_public_key = os.getenv("AUTH_JWT_PUBKEY")
+if jwt_public_key:
+    jwt_public_key = f'-----BEGIN PUBLIC KEY-----\n{jwt_public_key}\n-----END PUBLIC KEY-----\n'
+else:
+    with open("public_key.pem", "r") as public_file:
+        jwt_public_key = public_file.read()
+
+jwt_private_key = os.getenv("AUTH_JWT_PRIVKEY")
+if jwt_private_key:
+    jwt_private_key = f'-----BEGIN PRIVATE KEY-----\n{jwt_private_key}\n-----END PRIVATE KEY-----\n'
+else:
+    with open("private_key.pem", "r") as private_file:
+        jwt_private_key = private_file.read()
+
 @app.post("/api/users/register")
-
 def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
     user = User(email=user_request.email, username=user_request.username)
     user.passwordhash = hash_password(user_request.password)
+    user.verification_code = os.urandom(20).hex()
+    user.verification_code_expiration = int(time.time()) + 60*60*24 #one day
+    send_verification_email(user_request.email, user.verification_code)
     session.add(user)
     session.commit()
     session.refresh(user)
     one_week_in_seconds = 60*60*24*7
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"sub": user.id, "exp": expiration}
-    token = jwt.encode(payload, private_key, algorithm="EdDSA")
+    token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
     return jsonable_encoder({"token": token})
+
+@app.get("/api/users/verify/{verification_code}")
+def verify_user(verification_code: str, session: SessionDep):
+    user = session.exec(select(User).where(User.verification_code == verification_code)).first()
+    if user:
+        user.is_verified = True
+        user.verification_code = None
+        user.verification_code_expiration = None
+        user.verification_code_expiration = None
+        session.commit()
+        session.refresh(user)
+        return Response(status_code=204)
+    
+    raise HTTPException(status_code=404, detail="Verification code not found")
 
 
 @app.post("/api/users/login")
@@ -93,7 +121,7 @@ def login_user(user_request: LoginRequest, session: SessionDep) -> dict[str, str
     one_week_in_seconds = 60*60*24*7
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"sub": user.id, "exp": expiration}
-    token = jwt.encode(payload, private_key, algorithm="EdDSA")
+    token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
     return jsonable_encoder({"token": token})
 
 @app.get("/api/users/")
@@ -114,7 +142,7 @@ def read_user(user_id: int, session: SessionDep) -> UserInfo:
         raise HTTPException(status_code=404, detail="User not found")
     return UserInfo(id=user.id, email=user.email, username=user.username)
 
-@app.delete("/api/user/{user_id}")
+@app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, session: SessionDep):
     user = session.get(User, user_id)
     if not user:
