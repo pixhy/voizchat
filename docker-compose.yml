@@ -10,6 +10,8 @@ services:
       DATABASE_URL: sqlite:////var/opt/data/voizchat.db
       AUTH_JWT_PUBKEY: ${AUTH_JWT_PUBKEY}
       AUTH_JWT_PRIVKEY: ${AUTH_JWT_PRIVKEY}
+      GMAIL_ADDRESS: ${GMAIL_ADDRESS}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD}
       WEBCLIENT_BASE_URL: "http://localhost:3000"
     ports:
       - "8000:8000"
