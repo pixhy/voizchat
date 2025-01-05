@@ -11,7 +11,7 @@ export const fetchWrapper = {
 const BASE_URL = import.meta.env.VITE_API_URL;
 
 function request(method: string) {
-    return async (url: string, body: any): Promise<Result<any, {status: number, message: string}>> => {
+    return async (url: string, body: any = null): Promise<Result<any, {status: number, message: string}>> => {
         const requestOptions : Record<string, any> = {
             method,
             headers: authHeader(url)
