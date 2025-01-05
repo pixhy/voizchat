@@ -13,7 +13,8 @@ export default defineComponent({
       email: '',
       username: '',
       password: '',
-      showPassword: false
+      showPassword: false,
+      registerSuccessful: false,
     };
   },
   methods: {
@@ -21,7 +22,10 @@ export default defineComponent({
 
       let response = await useAuthStore().register(this.email, this.username, this.password)
       if(response != null){
-        console.log(response)
+        console.log(response);
+      }
+      else {
+        this.registerSuccessful = true;
       }
     }
   }
@@ -32,7 +36,7 @@ export default defineComponent({
 
 <template>
   <AuthDialog>
-    <template #form>
+    <template #form v-if="registerSuccessful == false">
       <form @submit.prevent="onSubmit"  class="auth-form">
         <div class="form-group">
           <label for="email">E-Mail address:</label>
@@ -59,7 +63,7 @@ export default defineComponent({
               @click="showPassword = !showPassword"
               class="toggle-password"
             >
-              {{ showPassword ? '🙈' : '👁️' }}
+              {{ !showPassword ? '🙈' : '👁️' }}
             </button>
           </div>
         </div>
@@ -73,6 +77,10 @@ export default defineComponent({
 
       <button class="google-button">Sign up with Google</button>
       </form>
+    </template>
+    <template #form v-else>
+      You have successfully registered. A verification email has been sent
+      to the provided email address.
     </template>
   </AuthDialog>
 </template>
