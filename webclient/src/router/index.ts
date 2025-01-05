@@ -34,6 +34,11 @@ const router = createRouter({
       name: 'messages',
       component: () => import('../components/authorized/Messages.vue'),
     },
+    {
+      path: '/verify/:code',
+      name: 'verify',
+      component: () => import('../components/VerifyCode.vue'),
+    },
   ],
 })
 
