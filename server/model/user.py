@@ -7,7 +7,9 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True)
     username: str = Field(index=True)
     passwordhash: str
-    #is_verified: bool = False
+    is_verified: bool = False
+    verification_code: str | None = None
+    verification_code_expiration: int | None = None
 
 class CreateUserRequest(BaseModel):
     email: str
