@@ -31,7 +31,15 @@ export const useAuthStore = defineStore('auth', {
             if(isSuccess(response)){
                 this.token = response.value.token;
                 localStorage.setItem('voizchat-token', this.token!);
-                router.push(this.returnUrl || '/messages');
+                return null;
+            }
+            else {
+                return response.error.message;
+            }
+        },
+        async verifyCode(verificationCode: string): Promise<string | null>{
+            let response = await fetchWrapper.get(`${baseUrl}/verify/${verificationCode}`)
+            if(isSuccess(response)){
                 return null;
             }
             else {
