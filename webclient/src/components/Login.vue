@@ -3,7 +3,6 @@ import AuthDialog from './AuthDialog.vue'
 import { RouterLink } from 'vue-router'
 import { defineComponent } from 'vue'
 import { useAuthStore } from '../stores/auth.store';
-import router from '@/router/index.ts'
 </script>
 <script lang="ts">
 
@@ -57,7 +56,7 @@ export default defineComponent({
               @click="showPassword = !showPassword"
               class="toggle-password"
             >
-              {{ showPassword ? '🙈' : '👁️' }}
+              {{ !showPassword ? '🙈' : '👁️' }}
             </button>
           </div>
         </div>
