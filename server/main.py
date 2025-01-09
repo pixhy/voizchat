@@ -3,14 +3,17 @@ import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, SQLModel, create_engine, select
-from model.user import User, CreateUserRequest, UserInfo, LoginRequest
+from model.user import User, CreateUserRequest, UserInfo, LoginRequest, PrivateUserInfo
+from model.friend_list import FriendListEntry
 from base64 import b64encode, b64decode
 import jwt
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from email_service import send_verification_email
+
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
@@ -82,6 +85,32 @@ else:
     with open("private_key.pem", "r") as private_file:
         jwt_private_key = private_file.read()
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/token")
+credentials_exception = HTTPException(
+    status_code=401,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep):
+    try:
+        payload = jwt.decode(token, jwt_public_key, algorithms=["EdDSA"])
+        user_id: int = payload.get("uid")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError as e:
+        raise credentials_exception
+    user = session.get(User, user_id)
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_current_active_user(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    if not current_user.is_verified:
+        raise HTTPException(status_code=400, detail="Unverified user")
+    return current_user
+
 @app.post("/api/users/register")
 def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
     user = User(email=user_request.email, username=user_request.username)
@@ -94,7 +123,7 @@ def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[st
     session.refresh(user)
     one_week_in_seconds = 60*60*24*7
     expiration = int(time.time()) + one_week_in_seconds
-    payload = {"sub": user.id, "exp": expiration}
+    payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
     return jsonable_encoder({"token": token})
 
@@ -120,9 +149,20 @@ def login_user(user_request: LoginRequest, session: SessionDep) -> dict[str, str
         raise HTTPException(status_code=401, detail="Invalid username or password")
     one_week_in_seconds = 60*60*24*7
     expiration = int(time.time()) + one_week_in_seconds
-    payload = {"sub": user.id, "exp": expiration}
+    payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
     return jsonable_encoder({"token": token})
+
+@app.post("/api/users/token")
+def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> dict[str, str]:
+    user = session.exec(select(User).where(User.email == form_data.username)).first()
+    if not user or not verify_password_hash(user.passwordhash, form_data.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    one_week_in_seconds = 60*60*24*7
+    expiration = int(time.time()) + one_week_in_seconds
+    payload = {"uid": user.id, "exp": expiration}
+    token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
+    return jsonable_encoder({"access_token": token, "token_type": "bearer"})
 
 @app.get("/api/users/")
 def read_users(
@@ -135,7 +175,7 @@ def read_users(
              for user in session.exec(select(User).offset(offset).limit(limit)).all()
     ]
 
-@app.get("/api/users/{user_id}")
+@app.get("/api/users/find-by-id/{user_id}")
 def read_user(user_id: int, session: SessionDep) -> UserInfo:
     user = session.get(User, user_id)
     if not user:
@@ -150,3 +190,53 @@ def delete_user(user_id: int, session: SessionDep):
     session.delete(user)
     session.commit()
     return {"ok": True}
+
+@app.post("/api/users/reset-password")
+#TBD
+def reset_password(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
+    user = session.exec(select(User).where(User.email == user_request.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.passwordhash = hash_password(user_request.password)
+
+@app.get("/api/users/find-by-name")
+def find_user_by_name(username: str, session: SessionDep) -> PrivateUserInfo:
+    user = session.exec(select(User).where(User.username == username)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return PrivateUserInfo(id=user.id, username=user.username)
+
+@app.post("/api/user/add-friend/{user_id}", status_code=201)
+def add_friend(user_id: int, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot add yourself as a friend")
+
+    friend = session.get(User, user_id)
+    if not friend:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    friend_entry = session.exec(
+        select(FriendListEntry)
+        .where(
+            ((FriendListEntry.user_id == friend.id) & (FriendListEntry.friend_id == current_user.id)) |
+            ((FriendListEntry.friend_id == friend.id) & (FriendListEntry.user_id == current_user.id))
+        )
+    ).first()
+
+    if not friend_entry:
+        friend_entry = FriendListEntry(user_id=current_user.id, friend_id=friend.id)
+        session.add(friend_entry)
+        session.commit()
+        return {"message": "Friend request sent"}
+
+    if friend_entry.pending:
+        if friend_entry.friend_id == current_user.id:
+            friend_entry.pending = False
+            friend_entry.date_added = int(time.time())
+            session.commit()
+            return {"message": "Friend request accepted."}
+        else:
+            raise HTTPException(status_code=400, detail="Friend request already sent. Wait for the other user to accept your friend request.")
+    else:
+        raise HTTPException(status_code=400, detail="User already in friends")
+
