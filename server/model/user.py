@@ -1,5 +1,4 @@
-﻿
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+﻿from sqlmodel import Field, SQLModel
 from pydantic import BaseModel
 
 class User(SQLModel, table=True):
@@ -23,4 +22,7 @@ class LoginRequest(BaseModel):
 class UserInfo(BaseModel):
     id: int
     email: str
+    username: str
+class PrivateUserInfo(BaseModel):
+    id: int
     username: str
