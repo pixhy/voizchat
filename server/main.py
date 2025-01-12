@@ -35,6 +35,18 @@ def verify_password_hash(password_hash, password):
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    
+
+def initialize_users(session: Session):
+    if not session.exec(select(User)).all():
+        test_users = [
+            User(email="test1@example.com", username="test1", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test2@example.com", username="test2", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test3@example.com", username="test3", passwordhash=hash_password("asdf"), is_verified=True),
+        ]
+        session.add_all(test_users)
+        session.commit()
+    
 
 
 def get_session():
@@ -50,6 +62,8 @@ async def lifespan(_app: FastAPI):
     # Startup
     hash(_app)
     create_db_and_tables()
+    with Session(engine) as session:
+        initialize_users(session)
     yield
     # Cleanup
     pass
@@ -115,6 +129,7 @@ async def get_current_active_user(
 def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
     user = User(email=user_request.email, username=user_request.username)
     user.passwordhash = hash_password(user_request.password)
+    session.commit()
     user.verification_code = os.urandom(20).hex()
     user.verification_code_expiration = int(time.time()) + 60*60*24 #one day
     send_verification_email(user_request.email, user.verification_code)
@@ -133,7 +148,6 @@ def verify_user(verification_code: str, session: SessionDep):
     if user:
         user.is_verified = True
         user.verification_code = None
-        user.verification_code_expiration = None
         user.verification_code_expiration = None
         session.commit()
         session.refresh(user)
@@ -171,7 +185,7 @@ def read_users(
     limit: Annotated[int, Query(le=100)] = 100,
 ) -> list[UserInfo]:
     return [
-        UserInfo(id=user.id, email=user.email, username=user.username)
+        UserInfo(userid=str(user.userid), email=user.email, username=user.username)
              for user in session.exec(select(User).offset(offset).limit(limit)).all()
     ]
 
@@ -180,7 +194,7 @@ def read_user(user_id: int, session: SessionDep) -> UserInfo:
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserInfo(id=user.id, email=user.email, username=user.username)
+    return UserInfo(userid=str(user.userid), email=user.email, username=user.username)
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, session: SessionDep):
@@ -204,14 +218,15 @@ def find_user_by_name(username: str, session: SessionDep) -> PrivateUserInfo:
     user = session.exec(select(User).where(User.username == username)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return PrivateUserInfo(id=user.id, username=user.username)
+    return PrivateUserInfo(id=str(user.userid), username=user.username)
 
 @app.post("/api/user/add-friend/{user_id}", status_code=201)
-def add_friend(user_id: int, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
-    if user_id == current_user.id:
+def add_friend(user_id: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
+    if user_id == current_user.userid:
         raise HTTPException(status_code=400, detail="Cannot add yourself as a friend")
 
-    friend = session.get(User, user_id)
+    #friend = session.get(User, { "userid": user_id })
+    friend = session.exec(select(User).where(User.userid == user_id)).first()
     if not friend:
         raise HTTPException(status_code=404, detail="User not found")
 
