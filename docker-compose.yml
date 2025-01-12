@@ -12,7 +12,7 @@ services:
       AUTH_JWT_PRIVKEY: ${AUTH_JWT_PRIVKEY}
       GMAIL_ADDRESS: ${GMAIL_ADDRESS}
       GMAIL_PASSWORD: ${GMAIL_PASSWORD}
-      WEBCLIENT_BASE_URL: "http://localhost:3000"
+      WEBCLIENT_BASE_URL: "http://localhost:4000"
     ports:
       - "8000:8000"
     networks:
@@ -25,9 +25,9 @@ services:
     build:
       context: ./webclient
     environment:
-      VITE_API_URL: "http://localhost:3000/api"
+      VITE_API_URL: "http://localhost:4000/api"
     ports:
-      - "3000:80"
+      - "4000:80"
     depends_on:
       - server
     networks:
