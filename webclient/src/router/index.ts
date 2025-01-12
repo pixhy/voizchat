@@ -5,7 +5,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
+      path: '/home',
       name: 'home',
       component: HomeView,
     },
@@ -30,9 +30,20 @@ const router = createRouter({
       component: () => import('../components/ForgottenPassword.vue'),
     },
     {
-      path: '/messages',
-      name: 'messages',
-      component: () => import('../components/authorized/Messages.vue'),
+      path: '/',
+      name: 'main',
+      component: () => import('../components/authorized/MainLayout.vue'),
+      children: [
+        {
+          path: '', 
+          component: () => import('../components/EmptyComponent.vue')
+        },
+        {
+          path: '/search',
+          name: 'search',
+          component: () => import('../components/authorized/UserSearch.vue')
+        }
+      ]
     },
     {
       path: '/verify/:code',
