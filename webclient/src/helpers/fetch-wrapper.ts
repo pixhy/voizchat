@@ -35,7 +35,7 @@ function request(method: string) {
         const { token, logout } = useAuthStore();
         if (response.status == 401 && token) {
             // auto logout if 401 Unauthorized response returned from api
-            logout();
+            await logout();
         }
 
         const error = (data && data.message) || response.statusText;
