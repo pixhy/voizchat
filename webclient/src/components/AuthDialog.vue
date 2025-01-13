@@ -2,7 +2,7 @@
 <template>
   <div class="auth-page">
     <div class="auth-container">
-      <h1 class="title">VoizChat</h1>
+      <img src="@/assets/logo.png"/>
       <slot name="form"></slot>
     </div>
   </div>
@@ -15,7 +15,7 @@
     align-items: center;
     height: 100vh;
     width: 100vw;
-    background: url('../assets/voizchatbg.png') no-repeat center;
+    background: url('@/assets/voizchatbg.png') no-repeat center;
   }
   
   .auth-container {
