@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
-import { type Result, isSuccess } from "@/helpers/result";
+import { isSuccess } from "@/helpers/result";
 import router from '@/router/index.ts'
 
 const baseUrl = `${import.meta.env.VITE_API_URL}/users` || '';
@@ -19,7 +19,7 @@ export const useAuthStore = defineStore('auth', {
             if(isSuccess(response)){
                 this.token = response.value.token;
                 localStorage.setItem('voizchat-token', this.token!);
-                router.push(this.returnUrl || '/messages');
+                await router.push(this.returnUrl || '/');
                 return null;
             }
             else {
@@ -46,10 +46,10 @@ export const useAuthStore = defineStore('auth', {
                 return response.error.message;
             }
         },
-        logout() {
+        async logout() {
             this.token = null;
             localStorage.removeItem('voizchat-token');
-            router.push('/login');
+            await router.push('/login');
         }
     }
 });
