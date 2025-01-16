@@ -38,7 +38,7 @@ function request(method: string) {
             await logout();
         }
 
-        const error = (data && data.message) || response.statusText;
+        const error = (data && data.detail) || response.statusText;
         return {success: false, error: {status: response.status, message: error}};
     }
 }
