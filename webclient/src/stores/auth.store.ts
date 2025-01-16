@@ -10,6 +10,7 @@ export const useAuthStore = defineStore('auth', {
     state: () => ({
         // initialize state from local storage to enable user to stay logged in
         token: localStorage.getItem('voizchat-token'),
+        userinfo: JSON.parse(localStorage.getItem('voizchat-userinfo')!),
         returnUrl: null
     }),
     actions: {
@@ -18,7 +19,9 @@ export const useAuthStore = defineStore('auth', {
 
             if(isSuccess(response)){
                 this.token = response.value.token;
+                this.userinfo = response.value.user;
                 localStorage.setItem('voizchat-token', this.token!);
+                localStorage.setItem('voizchat-userinfo', JSON.stringify(this.userinfo));
                 await router.push(this.returnUrl || '/');
                 return null;
             }
@@ -31,6 +34,7 @@ export const useAuthStore = defineStore('auth', {
             if(isSuccess(response)){
                 this.token = response.value.token;
                 localStorage.setItem('voizchat-token', this.token!);
+                localStorage.setItem('voizchat-userinfo', JSON.stringify(this.userinfo));
                 return null;
             }
             else {
@@ -49,6 +53,7 @@ export const useAuthStore = defineStore('auth', {
         async logout() {
             this.token = null;
             localStorage.removeItem('voizchat-token');
+            localStorage.removeItem('voizchat-userinfo');
             await router.push('/login');
         }
     }

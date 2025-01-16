@@ -1,3 +1,12 @@
+<script setup lang="ts">
+import { RouterView } from 'vue-router';
+import { useAuthStore } from '@/stores/auth.store';
+
+const authStore = useAuthStore();
+
+</script>
+
+
 <template>
   <div class="app">
     <div class="sidebar-left">
@@ -6,7 +15,7 @@
         <RouterLink class="add-btn" to="/servers">+</RouterLink>
       </div>
       <div class="sidebar-section">
-        <div class="sidebar-header">Friends</div>
+        <RouterLink class="sidebar-header" to="/friends">Friends</RouterLink>
         <RouterLink class="add-btn" to="/search">+</RouterLink>
       </div>
     </div>
@@ -18,6 +27,9 @@
     <div class="sidebar-right">
       <header class="top-bar">
         <img class="avatar" src="@/assets/default.png" alt="User Avatar" />
+        <div>
+          {{ authStore.userinfo.username }}
+        </div>
         <button class="icon-btn" aria-label="Microphone">
           <i class="icon mic-icon"></i>
         </button>
@@ -32,14 +44,6 @@
   </div>
 </template>
   
-<script lang="ts">
-import { defineComponent } from 'vue';
-import { RouterView } from 'vue-router';
-
-export default defineComponent({
-  name: 'MainLayout',
-});
-</script>
 
 <style scoped>
 .app {
@@ -76,8 +80,12 @@ export default defineComponent({
 .sidebar-header {
   font-size: 18px;
   font-weight: bold;
+  background: none;
+  color: #9A9AAF;
 }
-
+.sidebar-header:hover{
+  color: rgb(87, 123, 223)
+}
 .add-btn {
   background: none;
   color: #9A9AAF;
@@ -86,7 +94,7 @@ export default defineComponent({
 }
 
 .add-btn:hover {
-  color: white;
+  color: rgb(87, 123, 223)
 }
 
 .content {
