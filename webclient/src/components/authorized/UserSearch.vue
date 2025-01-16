@@ -1,32 +1,30 @@
 <script setup lang="ts">
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
-import { defineComponent, ref } from 'vue';
+import { ref } from 'vue';
 import { isSuccess } from '@/helpers/result';
-</script>
+import Friend from '@/components/authorized/FriendHandler/Friend.vue'
 
-<script lang="ts">
-export default defineComponent({
-  data() {
-    return {
-        username: '',
-        searchedUser: ref<any>(null),
-    };
-  },
-  methods: {
-    async handleSearch() {
-      let response = await fetchWrapper.get(`/api/users/find-by-name?username=${encodeURIComponent(this.username)}`);
-      if (isSuccess(response)) {
-        this.searchedUser = response.value;
-      }
-    },
-    async addFriend(userid:string){
-      let response = await fetchWrapper.post(`/api/user/add-friend/${userid}`);
-      if(response != null){
-        console.log(response);
-      }
-    }
-  },
-});
+const username = ref('');
+const searchedUser = ref<any>(null);
+const errorMessage = ref('');
+
+async function handleSearch(){
+  const response = await fetchWrapper.get(`/api/users/find-by-name?username=${encodeURIComponent(username.value)}`);
+  if (isSuccess(response)) {
+    errorMessage.value = '';
+    searchedUser.value = response.value;
+  } else {
+    errorMessage.value = response.error.message;
+    searchedUser.value = null;
+  }
+};
+
+async function addFriend (user: any){
+  const response = await fetchWrapper.post(`/api/user/add-friend/${user.userid}`);
+  if (response != null) {
+    console.log(response);
+  }
+};
 </script>
 
 <template>
@@ -35,10 +33,9 @@ export default defineComponent({
         <button class="search-button">Search</button>
     </form>
     <div class="search-result">
-      <div v-if="searchedUser" class="searched-user">
-        <img class="avatar" src="@/assets/default.png" alt="User Avatar" width="40"/>
-        <div class="search-result-username">{{ searchedUser.username }}</div>
-        <button class="friend-request-button" v-on:click="addFriend(searchedUser.id)">Add friend</button>
+      <Friend v-if="searchedUser" :user="searchedUser" action="Add friend" :actionFunction="addFriend"/>
+      <div v-else-if="errorMessage" class="user-not-found">
+        <div>{{ errorMessage }}</div>
       </div>
     </div>
 </template>
@@ -85,7 +82,8 @@ export default defineComponent({
   display: flex;
   justify-content: center;
 }
-.searched-user {
+
+.user-not-found {
   margin-top: 25px;
   padding: 10px;
   border: 1px solid #ccc;
@@ -93,29 +91,10 @@ export default defineComponent({
   width: 320px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   background-color: rgb(74, 95, 116);
-  grid-template-columns: auto 1fr auto;
-  display: grid;
+  display: flex;
+  justify-content: center;
   align-items: center;
-}
-
-.search-result-username {
-  justify-self: center;
-  margin: 3px;
-}
-
-.friend-request-button {
-  padding: 8px;
-  font-size: 14px;
-  color: white;
-  background-color: #28a745;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s, transform 0.2s;
-}
-
-.friend-request-button:hover {
-  background-color: #218838;
+  height: 62px;
 }
 
 </style>

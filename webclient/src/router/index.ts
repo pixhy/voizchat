@@ -1,14 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import { useAuthStore } from '@/stores/auth.store';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    {
-      path: '/home',
-      name: 'home',
-      component: HomeView,
-    },
     {
       path: '/about',
       name: 'about',
@@ -42,13 +38,23 @@ const router = createRouter({
           path: '/search',
           name: 'search',
           component: () => import('../components/authorized/UserSearch.vue')
+        },
+        {
+          path: '/friends',
+          name: 'friends',
+          component: () => import('../components/authorized/FriendHandler/FriendContents/AllFriends.vue')
+        },
+        {
+          path: '/friends/incoming',
+          name: 'friends-incoming',
+          component: () => import('../components/authorized/FriendHandler/FriendContents/IncomingFriends.vue')
+        },
+        {
+          path: '/friends/outgoing',
+          name: 'friends-outgoing',
+          component: () => import('../components/authorized/FriendHandler/FriendContents/OutgoingFriends.vue')
         }
       ]
-    },
-    {
-      path: '/verify/:code',
-      name: 'verify',
-      component: () => import('../components/VerifyCode.vue'),
     },
   ],
 })

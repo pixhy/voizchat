@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, SQLModel, create_engine, select
-from model.user import User, CreateUserRequest, UserInfo, LoginRequest, PrivateUserInfo
+from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
 from model.friend_list import FriendListEntry
 from base64 import b64encode, b64decode
 import jwt
@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from email_service import send_verification_email
-
+from sqlalchemy import or_
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
@@ -43,8 +43,30 @@ def initialize_users(session: Session):
             User(email="test1@example.com", username="test1", passwordhash=hash_password("asdf"), is_verified=True),
             User(email="test2@example.com", username="test2", passwordhash=hash_password("asdf"), is_verified=True),
             User(email="test3@example.com", username="test3", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test4@example.com", username="test4", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test5@example.com", username="test5", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test6@example.com", username="test6", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test7@example.com", username="test7", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test8@example.com", username="test8", passwordhash=hash_password("asdf"), is_verified=True),
+            User(email="test9@example.com", username="test9", passwordhash=hash_password("asdf"), is_verified=True),
         ]
         session.add_all(test_users)
+        session.add_all([
+            FriendListEntry(user_id=1, friend_id=4, pending=False),
+            FriendListEntry(user_id=1, friend_id=5, pending=True),
+            FriendListEntry(user_id=1, friend_id=7, pending=True),
+            FriendListEntry(user_id=1, friend_id=9, pending=False),
+            FriendListEntry(user_id=2, friend_id=1, pending=False),
+            FriendListEntry(user_id=2, friend_id=9, pending=False),
+            FriendListEntry(user_id=3, friend_id=7, pending=False),
+            FriendListEntry(user_id=4, friend_id=5, pending=False),
+            FriendListEntry(user_id=6, friend_id=1, pending=True),
+            FriendListEntry(user_id=6, friend_id=7, pending=False),
+            FriendListEntry(user_id=7, friend_id=2, pending=False),
+            FriendListEntry(user_id=7, friend_id=5, pending=False),
+            FriendListEntry(user_id=8, friend_id=3, pending=False),
+            FriendListEntry(user_id=8, friend_id=1, pending=True),
+        ])
         session.commit()
     
 
@@ -157,7 +179,7 @@ def verify_user(verification_code: str, session: SessionDep):
 
 
 @app.post("/api/users/login")
-def login_user(user_request: LoginRequest, session: SessionDep) -> dict[str, str]:
+def login_user(user_request: LoginRequest, session: SessionDep):
     user = session.exec(select(User).where(User.email == user_request.email)).first()
     if not user or not verify_password_hash(user.passwordhash, user_request.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -165,10 +187,10 @@ def login_user(user_request: LoginRequest, session: SessionDep) -> dict[str, str
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
-    return jsonable_encoder({"token": token})
+    return jsonable_encoder({"token": token, "user": UserInfo.from_user(user)})
 
 @app.post("/api/users/token")
-def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> dict[str, str]:
+def login_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> dict[str, str]:
     user = session.exec(select(User).where(User.email == form_data.username)).first()
     if not user or not verify_password_hash(user.passwordhash, form_data.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -185,16 +207,20 @@ def read_users(
     limit: Annotated[int, Query(le=100)] = 100,
 ) -> list[UserInfo]:
     return [
-        UserInfo(userid=str(user.userid), email=user.email, username=user.username)
+        UserInfo.from_user(user)
              for user in session.exec(select(User).offset(offset).limit(limit)).all()
     ]
+
+@app.get("/api/users/me")
+def get_current_user(current_user: Annotated[User, Depends(get_current_active_user)]) -> UserInfo:
+    return UserInfo.from_user(current_user)
 
 @app.get("/api/users/find-by-id/{user_id}")
 def read_user(user_id: int, session: SessionDep) -> UserInfo:
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserInfo(userid=str(user.userid), email=user.email, username=user.username)
+    return UserInfo.from_user(user)
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, session: SessionDep):
@@ -214,18 +240,17 @@ def reset_password(user_request: CreateUserRequest, session: SessionDep) -> dict
     user.passwordhash = hash_password(user_request.password)
 
 @app.get("/api/users/find-by-name")
-def find_user_by_name(username: str, session: SessionDep) -> PrivateUserInfo:
+def find_user_by_name(username: str, session: SessionDep) -> UserInfo:
     user = session.exec(select(User).where(User.username == username)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return PrivateUserInfo(id=str(user.userid), username=user.username)
+    return UserInfo.from_user(user)
 
 @app.post("/api/user/add-friend/{user_id}", status_code=201)
 def add_friend(user_id: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
     if user_id == current_user.userid:
         raise HTTPException(status_code=400, detail="Cannot add yourself as a friend")
 
-    #friend = session.get(User, { "userid": user_id })
     friend = session.exec(select(User).where(User.userid == user_id)).first()
     if not friend:
         raise HTTPException(status_code=404, detail="User not found")
@@ -255,3 +280,56 @@ def add_friend(user_id: str, session: SessionDep, current_user: Annotated[User, 
     else:
         raise HTTPException(status_code=400, detail="User already in friends")
 
+@app.post("/api/user/remove-friend/{user_id}", status_code=204)
+def remove_friend(user_id: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
+    friend = session.exec(select(User).where(User.userid == user_id)).first()
+    if not friend:
+        raise HTTPException(status_code=404, detail="User not found")
+    entry = session.exec(
+        select(FriendListEntry)
+        .where(
+            (
+                (FriendListEntry.user_id == friend.id) & (FriendListEntry.friend_id == current_user.id)
+            ) | (
+                (FriendListEntry.friend_id == friend.id) & (FriendListEntry.user_id == current_user.id)
+            )
+        )
+    ).first()
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="User not a friend")
+
+    session.delete(entry)
+    session.commit()
+    return Response(status_code=204)
+
+
+def get_friend_list_entries(session: SessionDep, user: User, what: str):
+    if what == "friends":
+        condition = ((FriendListEntry.user_id == user.id) | (FriendListEntry.friend_id == user.id)) & (FriendListEntry.pending == False)
+        onclause =  (((User.id == FriendListEntry.friend_id) & (FriendListEntry.user_id == user.id)) |
+                     ((User.id == FriendListEntry.user_id) & (FriendListEntry.friend_id == user.id)))
+    elif what == "outgoing-requests":
+        condition = (FriendListEntry.user_id == user.id) & (FriendListEntry.pending == True)
+        onclause = (User.id == FriendListEntry.friend_id)
+    elif what == "incoming-requests":
+        condition = (FriendListEntry.friend_id == user.id) & (FriendListEntry.pending == True)
+        onclause = (User.id == FriendListEntry.user_id)
+
+    return session.exec(
+        select(User)
+        .join(FriendListEntry, onclause)
+        .where(condition)
+    ).all()
+
+@app.get("/api/user/get-friends")
+def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+    return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "friends")]
+
+@app.get("/api/user/outgoing-friend-requests")
+def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+    return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "outgoing-requests")]
+
+@app.get("/api/user/incoming-friend-requests")
+def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+    return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "incoming-requests")]
