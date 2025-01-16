@@ -16,7 +16,7 @@ class ULIDType(TypeDecorator):
         if isinstance(value, ULID):
             return str(value)
         if isinstance(value, str):
-            return ULID.from_str(value)
+            return value
         raise ValueError(f"Expected ULID, got {type(value)}")
 
     def process_result_value(self, value, dialect):
