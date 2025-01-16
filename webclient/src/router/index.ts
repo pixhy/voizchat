@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
 import { useAuthStore } from '@/stores/auth.store';
 
 const router = createRouter({
@@ -26,12 +25,24 @@ const router = createRouter({
       component: () => import('../components/ForgottenPassword.vue'),
     },
     {
+      path: '/verify/:code',
+      name: 'verify',
+      component: () => import('../components/VerifyCode.vue'),
+    },
+    {
       path: '/',
       name: 'main',
+      beforeEnter: (to, from, next) => { 
+        if(!useAuthStore().token){
+          router.push('/login');
+        }
+        next();
+      },
       component: () => import('../components/authorized/MainLayout.vue'),
       children: [
         {
           path: '', 
+          name: 'empty',
           component: () => import('../components/EmptyComponent.vue')
         },
         {
