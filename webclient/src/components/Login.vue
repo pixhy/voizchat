@@ -1,29 +1,21 @@
 ﻿<script setup lang="ts">
-import AuthDialog from './AuthDialog.vue'
-import { RouterLink } from 'vue-router'
-import { defineComponent } from 'vue'
+import { ref } from 'vue';
 import { useAuthStore } from '../stores/auth.store';
-</script>
-<script lang="ts">
+import { RouterLink } from 'vue-router';
+import AuthDialog from './AuthDialog.vue';
 
-export default defineComponent({
-  data() {
-    return {
-      email: '',
-      password: '',
-      showPassword: false,
-    };
-  },
-  methods: {
-    async handleLogin() {
-      let response = await useAuthStore().login(this.email, this.password)
-      if(response != null){
-        console.log(response)
-      }
-    },
-  },
-});
+const email = ref('');
+const password = ref('');
+const showPassword = ref(false);
 
+const authStore = useAuthStore();
+
+const handleLogin = async () => {
+  const response = await authStore.login(email.value, password.value);
+  if (response != null) {
+    console.log(response);
+  }
+};
 </script>
 
 <template>
