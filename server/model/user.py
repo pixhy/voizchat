@@ -1,6 +1,6 @@
 ﻿from sqlmodel import Field, SQLModel, Column
 from pydantic import BaseModel
-from ..util.ulidtype import ULIDType
+from server.util.ulidtype import ULIDType
 from ulid import ULID
 
 class User(SQLModel, table=True):
@@ -22,10 +22,16 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-class UserInfo(BaseModel):
+class PrivateUserInfo(BaseModel):
     userid: str
     email: str
     username: str
-class PrivateUserInfo(BaseModel):
-    id: str
+    @staticmethod
+    def from_user(user: User):
+        return PrivateUserInfo(userid=str(user.userid), email=user.email, username=user.username)
+class UserInfo(BaseModel):
+    userid: str
     username: str
+    @staticmethod
+    def from_user(user: User):
+        return UserInfo(userid=str(user.userid), username=user.username)
