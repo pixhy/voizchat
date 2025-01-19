@@ -16,7 +16,7 @@ const authStore = useAuthStore();
       </div>
       <div class="sidebar-section">
         <RouterLink class="sidebar-header" to="/friends">Friends</RouterLink>
-        <RouterLink class="add-btn" to="/search">+</RouterLink>
+        <RouterLink class="add-btn" to="/user-search">+</RouterLink>
       </div>
     </div>
 
