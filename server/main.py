@@ -13,7 +13,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from email_service import send_verification_email
-from sqlalchemy import or_
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
