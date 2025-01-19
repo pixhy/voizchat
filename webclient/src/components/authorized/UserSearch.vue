@@ -33,7 +33,7 @@ async function addFriend (user: any){
         <button class="search-button">Search</button>
     </form>
     <div class="search-result">
-      <Friend v-if="searchedUser" :user="searchedUser" action="Add friend" :actionFunction="addFriend"/>
+      <Friend v-if="searchedUser" :user="searchedUser" :actions="{'Add friend': addFriend}"/>
       <div v-else-if="errorMessage" class="user-not-found">
         <div>{{ errorMessage }}</div>
       </div>

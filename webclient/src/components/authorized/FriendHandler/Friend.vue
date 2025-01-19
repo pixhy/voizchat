@@ -1,6 +1,9 @@
 <script setup lang="ts">
 
-const {user, actions} = defineProps(['user', 'actions']);
+const {user, actions} = defineProps<{
+  user: any,
+  actions: Record<string, (user: any) => void>
+}>();
 
 </script>
 
@@ -8,11 +11,14 @@ const {user, actions} = defineProps(['user', 'actions']);
 
   <div class="user">
     <img class="avatar" src="@/assets/default.png" alt="User Avatar" width="40"/>
-    <div class="username">{{ user.username }}</div>
+    <div class="username" :title="user.username">{{ user.username }}</div>
     <div>
-      <!--<button v-for="?" class="action-button" v-on:click="actionFunction(user)">
-        {{ action }}
-      </button>-->
+      <button
+        v-for="[buttonText, callback] in Object.entries(actions)"
+        class="action-button"
+        v-on:click="callback(user)">
+          {{ buttonText }}
+      </button>
     </div>
   </div>
 </template>
@@ -35,6 +41,10 @@ const {user, actions} = defineProps(['user', 'actions']);
 .username {
   justify-self: center;
   margin: 3px;
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .action-button {
@@ -46,9 +56,12 @@ const {user, actions} = defineProps(['user', 'actions']);
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.3s, transform 0.2s;
+  height: 37px;
+  min-width: 37px;
+  margin-left: 5px;
 }
 
-.friend-request-button:hover {
+.action-button:hover {
   background-color: #218838;
 }
 </style>
