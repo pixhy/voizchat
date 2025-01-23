@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router';
 
-const {user, actions} = defineProps<{
+const {user, actions, clickable} = defineProps<{
   user: any,
-  actions: Record<string, (user: any) => void>
+  actions: Record<string, (user: any) => void>,
+  clickable: boolean
 }>();
 
 </script>
@@ -11,7 +13,10 @@ const {user, actions} = defineProps<{
 
   <div class="user">
     <img class="avatar" src="@/assets/default.png" alt="User Avatar" width="40"/>
-    <div class="username" :title="user.username">{{ user.username }}</div>
+    <div class="username" :title="user.username">
+      <RouterLink v-if="clickable" :to="`/chat/user/${user.userid}`">{{ user.username }}</RouterLink>
+      <span v-else>{{ user.username }}</span>
+    </div>
     <div>
       <button
         v-for="[buttonText, callback] in Object.entries(actions)"
