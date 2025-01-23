@@ -22,6 +22,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000', // FastAPI server
         changeOrigin: true
+      },
+      '/api/ws': {
+        target: 'http://localhost:8000', // FastAPI server
+        ws: true,
+        changeOrigin: true
       }
     }
   }
