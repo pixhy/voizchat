@@ -1,6 +1,6 @@
 ﻿from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
-
+raise Exception("This file is not used anymore")
 private_key = ed25519.Ed25519PrivateKey.generate()
 public_key = private_key.public_key()
 
