@@ -18,6 +18,7 @@ const actions = {
   <FriendItems
     endpoint="/api/user/get-friends"
     :actions="actions"
+    :clickable="true"
     ref="allFriends">
     <template #empty>
       No friends found.

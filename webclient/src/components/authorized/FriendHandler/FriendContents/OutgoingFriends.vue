@@ -17,6 +17,7 @@ const actions = {
   <FriendItems
    endpoint="/api/user/outgoing-friend-requests"
    :actions="actions"
+   :clickable="false"
    ref="outgoingFriends">
     <template #empty>
       No pending requests.

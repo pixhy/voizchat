@@ -4,9 +4,10 @@ import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { isSuccess } from '@/helpers/result';
 import Friend from '@/components/authorized/FriendHandler/Friend.vue'
 
-const {endpoint, actions} = defineProps<{
+const {endpoint, actions, clickable} = defineProps<{
   endpoint: string,
   actions: Record<string, (user: any) => void>
+  clickable: boolean
 }>();
 
 const users = ref<any[]>([]);
@@ -39,7 +40,7 @@ onMounted(() => {
 
 <template>
   <div v-if="users.length > 0">
-    <Friend v-for="friend in users" :user="friend" :actions="actions"/>
+    <Friend v-for="friend in users" :user="friend" :actions="actions" :clickable="clickable"/>
   </div>
   <div v-else>
     <p class="no-items">
