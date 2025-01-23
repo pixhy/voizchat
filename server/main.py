@@ -2,17 +2,20 @@ import hashlib
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response,  WebSocket, WebSocketDisconnect, status, WebSocketException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, SQLModel, create_engine, select
-from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
-from model.friend_list import FriendListEntry
 from base64 import b64encode, b64decode
 import jwt
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
+
 from email_service import send_verification_email
+from services.websocket_manager import ConnectionManager
+from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
+from model.friend_list import FriendListEntry
+from model.message import Message, NewMessage, TargetTypeEnum
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
@@ -146,6 +149,47 @@ async def get_current_active_user(
         raise HTTPException(status_code=400, detail="Unverified user")
     return current_user
 
+async def get_active_user_by_token(token: str, session: Session):
+    try:
+        payload = jwt.decode(token, jwt_public_key, algorithms=["EdDSA"])
+        user_id: int = payload.get("uid")
+        if user_id is None:
+            return None
+    except jwt.InvalidTokenError as e:
+        return None
+    user = session.get(User, user_id)
+    if user is None or not user.is_verified:
+        return None
+    return user
+
+
+manager = ConnectionManager()
+@app.websocket("/api/ws")
+async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
+    await websocket.accept()
+
+    data = await websocket.receive_json()
+    try:
+        if data["cmd"] == "login":
+            token = data["data"]["token"]
+            current_user = await get_active_user_by_token(token, session)
+            if not current_user:
+                raise ValueError("cannot authenticate user")
+        else:
+            raise ValueError("command is not login")
+    except Exception as e:
+        print(e)
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
+    await manager.connect(websocket, current_user)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
+
 @app.post("/api/users/register")
 def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
     user = User(email=user_request.email, username=user_request.username)
@@ -214,9 +258,9 @@ def read_users(
 def get_current_user(current_user: Annotated[User, Depends(get_current_active_user)]) -> UserInfo:
     return UserInfo.from_user(current_user)
 
-@app.get("/api/users/find-by-id/{user_id}")
-def read_user(user_id: int, session: SessionDep) -> UserInfo:
-    user = session.get(User, user_id)
+@app.get("/api/users/find-by-id/{userid}")
+def read_user(userid: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> UserInfo:
+    user = session.exec(select(User).where(User.userid == userid)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserInfo.from_user(user)
@@ -332,3 +376,35 @@ def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_c
 @app.get("/api/user/incoming-friend-requests")
 def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
     return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "incoming-requests")]
+
+
+@app.post("/api/message/{target_type}/{target_id}")
+async def post_message(new_message: NewMessage, target_type: TargetTypeEnum, target_id: str, current_user:
+Annotated[User,
+Depends(get_current_active_user)], session: SessionDep):
+    if target_type == "user":
+        target = session.exec(select(User).where(User.userid == target_id)).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        message = Message(target_type = target_type, target_id = target.userid, sender_id = current_user.userid,
+                          message=new_message.message, created_at=int(time.time()))
+        session.add(message)
+        session.commit()
+        print(message, message.message)
+        await manager.broadcast_to_user(target, "message", message)
+        return message
+    else:
+        raise HTTPException(status_code=400, detail="not implemented")
+
+@app.get("/api/messages/{target_type}/{target_id}")
+async def get_messages(target_type: TargetTypeEnum, target_id: str, current_user:
+Annotated[User, Depends(get_current_active_user)], session: SessionDep, limit: int = 5):
+    if target_type == "user":
+        target = session.exec(select(User).where(User.userid == target_id)).first()
+        messages= session.exec(select(Message).where(
+            ((Message.target_id == target.userid) & (Message.sender_id == current_user.userid)) |
+            ((Message.target_id == current_user.userid) & (Message.sender_id == target.userid)))
+            .order_by(Message.id.desc()).limit(limit)
+        )
+        return list(messages)[::-1]
+
