@@ -6,9 +6,10 @@ from ulid import ULID
 
 class ULIDType(TypeDecorator):
     impl = CHAR
+    cache_ok = True
 
     def __init__(self):
-        super().__init__(length=26)
+        super().__init__(length=26, )
 
     def process_bind_param(self, value, dialect):
         if value is None:

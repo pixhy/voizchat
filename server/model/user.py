@@ -1,6 +1,6 @@
 ﻿from sqlmodel import Field, SQLModel, Column
 from pydantic import BaseModel
-from server.util.ulidtype import ULIDType
+from util.ulidtype import ULIDType
 from ulid import ULID
 
 class User(SQLModel, table=True):
