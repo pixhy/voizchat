@@ -2,8 +2,9 @@
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
+from sqlmodel import select, Session
 
-
+from model.channels import Channel, ChannelUser
 from model.user import User
 
 class Message(BaseModel):
@@ -31,9 +32,9 @@ class ConnectionManager:
         for user_list in self.active_connections:
             user_list.remove(websocket)
 
-    async def broadcast_to_user(self, user: User, command: str, obj: BaseModel):
-        print("user:", user, type(user), repr(user), user.userid, "websockets: ", self.active_connections)
-        websockets = self.active_connections.get(user.userid)
+    async def broadcast_to_user(self, user_id: str, command: str, obj: BaseModel):
+        print("user:", user_id, "websockets: ", self.active_connections)
+        websockets = self.active_connections.get(user_id)
         json_str = Message(cmd=command, data=obj).model_dump_json()
         if websockets:
             for websocket in websockets:
@@ -41,6 +42,12 @@ class ConnectionManager:
                     print("sending to websocket", websocket, json_str)
                     await websocket.send_text(json_str)
         else:
-            print("no websockets for user", user)
+            print("no websockets for user", user_id)
+
+    async def broadcast_to_channel(self, session: Session, channel: Channel, command: str, obj: BaseModel, skip_user: User = None):
+        users = session.exec(select(ChannelUser.user_id).where(ChannelUser.channel_id == channel.channel_id)).all()
+        for user_id in users:
+            if not skip_user or skip_user.userid != user_id:
+                await self.broadcast_to_user(user_id, command, obj)
 
 

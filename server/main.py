@@ -12,10 +12,17 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 
 from email_service import send_verification_email
+from model.opened_chat import OpenedChat
 from services.websocket_manager import ConnectionManager
 from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
 from model.friend_list import FriendListEntry
-from model.message import Message, NewMessage, TargetTypeEnum
+from model.message import Message, NewMessage
+from model.channels import Channel, ChannelUser, ChannelType
+
+import logging
+logging.basicConfig()
+sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
+sqlalchemy_logging.setLevel(logging.DEBUG)
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
@@ -134,11 +141,14 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
         payload = jwt.decode(token, jwt_public_key, algorithms=["EdDSA"])
         user_id: int = payload.get("uid")
         if user_id is None:
+            print("token has no uid")
             raise credentials_exception
     except jwt.InvalidTokenError as e:
+        print(e)
         raise credentials_exception
     user = session.get(User, user_id)
     if user is None:
+        print("user not found")
         raise credentials_exception
     return user
 
@@ -148,6 +158,8 @@ async def get_current_active_user(
     if not current_user.is_verified:
         raise HTTPException(status_code=400, detail="Unverified user")
     return current_user
+
+UserDep = Annotated[User, Depends(get_current_active_user)]
 
 async def get_active_user_by_token(token: str, session: Session):
     try:
@@ -255,11 +267,11 @@ def read_users(
     ]
 
 @app.get("/api/users/me")
-def get_current_user(current_user: Annotated[User, Depends(get_current_active_user)]) -> UserInfo:
+def get_current_user(current_user: UserDep) -> UserInfo:
     return UserInfo.from_user(current_user)
 
 @app.get("/api/users/find-by-id/{userid}")
-def read_user(userid: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> UserInfo:
+def read_user(userid: str, session: SessionDep, current_user: UserDep) -> UserInfo:
     user = session.exec(select(User).where(User.userid == userid)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -290,7 +302,7 @@ def find_user_by_name(username: str, session: SessionDep) -> UserInfo:
     return UserInfo.from_user(user)
 
 @app.post("/api/user/add-friend/{user_id}", status_code=201)
-def add_friend(user_id: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
+def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
     if user_id == current_user.userid:
         raise HTTPException(status_code=400, detail="Cannot add yourself as a friend")
 
@@ -324,7 +336,7 @@ def add_friend(user_id: str, session: SessionDep, current_user: Annotated[User, 
         raise HTTPException(status_code=400, detail="User already in friends")
 
 @app.post("/api/user/remove-friend/{user_id}", status_code=204)
-def remove_friend(user_id: str, session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]):
+def remove_friend(user_id: str, session: SessionDep, current_user: UserDep):
     friend = session.exec(select(User).where(User.userid == user_id)).first()
     if not friend:
         raise HTTPException(status_code=404, detail="User not found")
@@ -366,45 +378,89 @@ def get_friend_list_entries(session: SessionDep, user: User, what: str):
     ).all()
 
 @app.get("/api/user/get-friends")
-def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+def get_friends(session: SessionDep, current_user: UserDep) -> list[UserInfo]:
     return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "friends")]
 
 @app.get("/api/user/outgoing-friend-requests")
-def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+def get_friends(session: SessionDep, current_user: UserDep) -> list[UserInfo]:
     return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "outgoing-requests")]
 
 @app.get("/api/user/incoming-friend-requests")
-def get_friends(session: SessionDep, current_user: Annotated[User, Depends(get_current_active_user)]) -> list[UserInfo]:
+def get_friends(session: SessionDep, current_user: UserDep) -> list[UserInfo]:
     return [UserInfo.from_user(friend) for friend in get_friend_list_entries(session, current_user, "incoming-requests")]
 
 
-@app.post("/api/message/{target_type}/{target_id}")
-async def post_message(new_message: NewMessage, target_type: TargetTypeEnum, target_id: str, current_user:
-Annotated[User,
-Depends(get_current_active_user)], session: SessionDep):
-    if target_type == "user":
+@app.post("/api/message/{channel_id}")
+async def post_message(new_message: NewMessage, channel_id: str, current_user: UserDep,
+                       session: SessionDep):
+    channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="User not found")
+    message = Message(message_id = channel.channel_id, sender_id = current_user.userid,
+                      message=new_message.message, created_at=int(time.time()))
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+
+    await manager.broadcast_to_channel(session, channel, "message", message, current_user)
+    return message
+
+@app.get("/api/messages/{channel_id}")
+async def get_messages(channel_id: str, current_user: UserDep, session: SessionDep, limit: int = 5):
+    channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="User not found")
+    return list(session.exec(
+        select(Message).where(Message.channel_id == channel.channel_id)
+        .order_by(Message.id.desc()).limit(limit)
+    ))[::-1]
+
+@app.get("/api/opened_chat/all")
+async def get_opened_chats(current_user:UserDep, session: SessionDep) -> list[Channel]:
+    return session.exec(
+        select(Channel)
+        .join(OpenedChat, Channel.channel_id == OpenedChat.channel_id)
+        .where(OpenedChat.user_id == current_user.userid)
+    ).all()
+
+@app.post("/api/opened_chat/{channel_type}/{target_id}")
+async def post_opened_chat(channel_type: ChannelType, target_id: str, current_user:
+UserDep, session: SessionDep) -> Channel:
+    if channel_type == "user":
         target = session.exec(select(User).where(User.userid == target_id)).first()
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        message = Message(target_type = target_type, target_id = target.userid, sender_id = current_user.userid,
-                          message=new_message.message, created_at=int(time.time()))
-        session.add(message)
-        session.commit()
-        print(message, message.message)
-        await manager.broadcast_to_user(target, "message", message)
-        return message
+        channel = ChannelUser.find_user_channel(session, current_user.userid, target.userid)
+        if not channel:
+            channel = Channel(channel_type=channel_type)
+            session.add(channel)
+            session.add(ChannelUser(channel_id=channel.channel_id, user_id=current_user.userid))
+            session.add(ChannelUser(channel_id=channel.channel_id, user_id=target.userid))
+
+        if not session.exec(select(OpenedChat).where((OpenedChat.user_id == current_user.userid) & (
+                OpenedChat.channel_id == channel.channel_id))).first():
+            opened_chat = OpenedChat(user_id=current_user.userid, channel_id=channel.channel_id, channel_type=channel_type)
+            session.add(opened_chat)
+            session.commit()
+            session.refresh(channel)
+            return channel
+        else:
+            raise HTTPException(status_code=400, detail="Chat already exists")
     else:
-        raise HTTPException(status_code=400, detail="not implemented")
+        raise HTTPException(status_code=400, detail="Not implemented")
 
-@app.get("/api/messages/{target_type}/{target_id}")
-async def get_messages(target_type: TargetTypeEnum, target_id: str, current_user:
-Annotated[User, Depends(get_current_active_user)], session: SessionDep, limit: int = 5):
-    if target_type == "user":
-        target = session.exec(select(User).where(User.userid == target_id)).first()
-        messages= session.exec(select(Message).where(
-            ((Message.target_id == target.userid) & (Message.sender_id == current_user.userid)) |
-            ((Message.target_id == current_user.userid) & (Message.sender_id == target.userid)))
-            .order_by(Message.id.desc()).limit(limit)
-        )
-        return list(messages)[::-1]
-
+@app.delete("/api/opened_chat/{channel_id}")
+async def delete_opened_chat(channel_id: str, current_user: UserDep, session: SessionDep):
+    channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="User not found")
+    if channel.channel_type == "user":
+        delete_chat = session.exec(select(OpenedChat).where(
+            (OpenedChat.user_id == current_user.userid) & (Channel.channel_id == channel_id)
+        )).first()
+        if delete_chat:
+            session.delete(delete_chat)
+            session.commit()
+            return Response(status_code=204)
+        else:
+            raise HTTPException(status_code=404, detail="Chat not found")
