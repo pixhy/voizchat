@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
+import { useConversationsStore } from '@/stores/opened_chats'
+import { onMounted } from 'vue';
 
 const authStore = useAuthStore();
+const conversationsStore = useConversationsStore();
+
+onMounted( async () => {
+  await conversationsStore.fetchConversations();
+})
 
 </script>
 
@@ -11,13 +18,22 @@ const authStore = useAuthStore();
   <div class="app">
     <div class="sidebar-left">
       <div class="sidebar-section">
-        <div class="sidebar-header">Servers</div>
-        <RouterLink class="add-btn" to="/servers">+</RouterLink>
+        <!--<div class="sidebar-header">Servers</div>
+        <RouterLink class="add-btn" to="/servers">+</RouterLink>-->
       </div>
       <div class="sidebar-section">
-        <RouterLink class="sidebar-header" to="/friends">Friends</RouterLink>
-        <RouterLink class="add-btn" to="/user-search">+</RouterLink>
+        <div class="sidebar-header">
+          <RouterLink class="sidebar-header" to="/friends">Friends</RouterLink>
+          <RouterLink class="add-btn" to="/user-search">+</RouterLink>
+        </div>
+        <div class="opened-friend-chat">
+          <div v-for="chat, id in conversationsStore.list" :key="id">
+            <RouterLink :to="`/chat/user/${chat.userid}`">{{ chat.username }}</RouterLink>
+
+          </div>
+        </div>
       </div>
+
     </div>
 
     <main class="content">
@@ -46,6 +62,11 @@ const authStore = useAuthStore();
   
 
 <style scoped>
+
+.opened-friend-chat {
+  display: block;
+}
+
 .app {
   display: flex;
   height: 100vh;
@@ -71,13 +92,16 @@ const authStore = useAuthStore();
 }
 
 .sidebar-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 20px;
 }
 
-.sidebar-header {
+div.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+a.sidebar-header {
   font-size: 18px;
   font-weight: bold;
   background: none;

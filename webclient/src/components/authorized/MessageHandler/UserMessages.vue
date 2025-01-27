@@ -5,6 +5,7 @@ import { getUser, getMe, prefetchMe, type User } from '@/helpers/users'
 import { ref } from 'vue';
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { useAuthStore } from '@/stores/auth.store';
+import { useConversationsStore } from '@/stores/opened_chats'
 
 interface Message {
   sender_id: string;
@@ -25,6 +26,9 @@ const bottomElement = ref<HTMLElement | null>(null);
 let me: User | null = null;
 
 onMounted(async () => {
+  const conversationsStore = useConversationsStore();
+  await conversationsStore.openOpenedChat(userid);
+
   const messagesResponse = await fetchWrapper.get(`/api/messages/user/${userid}?limit=20`)
   if(messagesResponse.success){
     messages.value = messagesResponse.value
@@ -75,11 +79,13 @@ const newMessage = ref("");
 
 async function sendMessage(e : Event) {
   e.preventDefault()
-  const messageObj = {message: newMessage.value}
-  const postMessage = await fetchWrapper.post(`/api/message/user/${userid}`, messageObj)
-  if(postMessage.success){
-    addMessage(postMessage.value);
-    newMessage.value = ""; //😘
+  if(newMessage.value.length > 0){
+    const messageObj = {message: newMessage.value}
+    const postMessage = await fetchWrapper.post(`/api/message/user/${userid}`, messageObj)
+    if(postMessage.success){
+      addMessage(postMessage.value);
+      newMessage.value = ""; 
+    }
   }
 };
 
