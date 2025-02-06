@@ -79,8 +79,8 @@ export default defineComponent({
       </form>
     </template>
     <template #form v-else>
-      You have successfully registered. A verification email has been sent
-      to the provided email address.
+      <p>You have successfully registered.</p>
+      <p>A verification email has been sent to the provided email address.</p>
     </template>
   </AuthDialog>
 </template>
