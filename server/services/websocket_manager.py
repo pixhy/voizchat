@@ -29,7 +29,7 @@ class ConnectionManager:
         self.active_connections.setdefault(user.userid, []).append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        for user_list in self.active_connections:
+        for user_list in self.active_connections.values():
             user_list.remove(websocket)
 
     async def broadcast_to_user(self, user_id: str, command: str, obj: BaseModel):
