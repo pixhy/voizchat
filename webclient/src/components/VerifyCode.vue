@@ -34,7 +34,7 @@ export default defineComponent({
               clearInterval(timer);
               timer = null;
             }
-            this.$router.push("/messages");
+            this.$router.push("/");
           }
         }, 1000);
 
