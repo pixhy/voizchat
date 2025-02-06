@@ -10,9 +10,10 @@ import jwt
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 import time
+from enum import Enum
 
 from email_service import send_verification_email
-from model.opened_chat import OpenedChat
+from model.opened_chat import OpenedChat, OpenedChatResponse
 from services.websocket_manager import ConnectionManager
 from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
 from model.friend_list import FriendListEntry
@@ -396,8 +397,10 @@ async def post_message(new_message: NewMessage, channel_id: str, current_user: U
     channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
     if not channel:
         raise HTTPException(status_code=404, detail="User not found")
-    message = Message(message_id = channel.channel_id, sender_id = current_user.userid,
-                      message=new_message.message, created_at=int(time.time()))
+    timestamp = int(time.time())
+    channel.last_update = timestamp
+    message = Message(channel_id = channel.channel_id, sender_id = current_user.userid,
+                      message=new_message.message, created_at=timestamp)
     session.add(message)
     session.commit()
     session.refresh(message)
@@ -416,48 +419,74 @@ async def get_messages(channel_id: str, current_user: UserDep, session: SessionD
     ))[::-1]
 
 @app.get("/api/opened_chat/all")
-async def get_opened_chats(current_user:UserDep, session: SessionDep) -> list[Channel]:
-    return session.exec(
+async def get_opened_chats(current_user:UserDep, session: SessionDep) -> list[OpenedChatResponse]:
+    channels = session.exec(
         select(Channel)
         .join(OpenedChat, Channel.channel_id == OpenedChat.channel_id)
         .where(OpenedChat.user_id == current_user.userid)
     ).all()
+    return [
+        OpenedChatResponse(channel = channel, users=[
+            UserInfo.from_user(user)
+            for user in channel.get_users(session, current_user)
+        ])
+        for channel in channels
+    ]
 
-@app.post("/api/opened_chat/{channel_type}/{target_id}")
-async def post_opened_chat(channel_type: ChannelType, target_id: str, current_user:
-UserDep, session: SessionDep) -> Channel:
-    if channel_type == "user":
-        target = session.exec(select(User).where(User.userid == target_id)).first()
-        if not target:
+
+class OpenChatOpenMode(str, Enum):
+    user = "user"
+    channel = "channel"
+
+@app.post("/api/opened_chat/{open_mode}/{target_id}")
+async def post_opened_chat(open_mode: OpenChatOpenMode, target_id: str, current_user:
+UserDep, session: SessionDep) -> OpenedChatResponse:
+    if open_mode == OpenChatOpenMode.user:
+        user = session.exec(select(User).where(User.userid == target_id)).first()
+        if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        channel = ChannelUser.find_user_channel(session, current_user.userid, target.userid)
+        channel = ChannelUser.find_user_channel(session, current_user.userid, user.userid)
         if not channel:
-            channel = Channel(channel_type=channel_type)
+            # TODO add friend check
+
+            channel = Channel(channel_type="user", last_update=int(time.time()))
             session.add(channel)
             session.add(ChannelUser(channel_id=channel.channel_id, user_id=current_user.userid))
-            session.add(ChannelUser(channel_id=channel.channel_id, user_id=target.userid))
+            session.add(ChannelUser(channel_id=channel.channel_id, user_id=user.userid))
 
-        if not session.exec(select(OpenedChat).where((OpenedChat.user_id == current_user.userid) & (
-                OpenedChat.channel_id == channel.channel_id))).first():
-            opened_chat = OpenedChat(user_id=current_user.userid, channel_id=channel.channel_id, channel_type=channel_type)
-            session.add(opened_chat)
-            session.commit()
-            session.refresh(channel)
-            return channel
-        else:
-            raise HTTPException(status_code=400, detail="Chat already exists")
+            print("created channel", channel)
+
+
+    elif open_mode == OpenChatOpenMode.channel:
+        channel = session.exec(select(Channel).where(Channel.channel_id == target_id)).first()
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+
+    if not session.exec(select(OpenedChat).where((OpenedChat.user_id == current_user.userid) & (
+            OpenedChat.channel_id == channel.channel_id))).first():
+        opened_chat = OpenedChat(user_id=current_user.userid, channel_id=channel.channel_id)
+        session.add(opened_chat)
+        print("commit()")
+        session.commit()
+        print("refresh()", channel, channel.channel_id, channel.channel_type)
+        session.refresh(channel)
+        return OpenedChatResponse(channel = channel, users=[
+            UserInfo.from_user(user)
+            for user in channel.get_users(session, current_user)
+        ])
     else:
-        raise HTTPException(status_code=400, detail="Not implemented")
+        raise HTTPException(status_code=400, detail="Chat already exists")
 
 @app.delete("/api/opened_chat/{channel_id}")
 async def delete_opened_chat(channel_id: str, current_user: UserDep, session: SessionDep):
     channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
     if not channel:
         raise HTTPException(status_code=404, detail="User not found")
-    if channel.channel_type == "user":
+    if channel.channel_type == ChannelType.user:
         delete_chat = session.exec(select(OpenedChat).where(
-            (OpenedChat.user_id == current_user.userid) & (Channel.channel_id == channel_id)
+            (OpenedChat.user_id == current_user.userid) & (OpenedChat.channel_id == channel_id)
         )).first()
+
         if delete_chat:
             session.delete(delete_chat)
             session.commit()

@@ -66,9 +66,14 @@ const router = createRouter({
           component: () => import('../components/authorized/FriendHandler/FriendContents/OutgoingFriends.vue')
         },
         {
-          path: '/chat/user/:userid',
+          path: '/chat-user/:userId',
           name: 'chat-user',
           component: () => import('../components/authorized/MessageHandler/UserMessages.vue')
+        },
+        {
+          path: '/chat/:channelId',
+          name: 'chat-channel',
+          component: () => import('../components/authorized/MessageHandler/Messages.vue')
         }
       ]
     },

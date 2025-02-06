@@ -2,20 +2,104 @@
 import { RouterView } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConversationsStore } from '@/stores/opened_chats'
-import { onMounted } from 'vue';
+import { prefetchMe } from '@/helpers/users';
+import { onMounted, onUnmounted, ref, provide } from 'vue';
+import { type Message } from './MessageHandler/Messages.vue'
+import { fetchWrapper } from '@/helpers/fetch-wrapper';
+import { useRoute } from 'vue-router';
+import router from '@/router/index.ts'
 
 const authStore = useAuthStore();
-const conversationsStore = useConversationsStore();
+let conversationsStore = useConversationsStore();
+const route = useRoute();
+let ws: WebSocket | null = null;
+
+const loading = ref<boolean>(true);
 
 onMounted( async () => {
+  console.log("MainLayout mounted");
+  if(loading.value == false){
+    console.log("loading is already false THIS IS BAD!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  }
   await conversationsStore.fetchConversations();
+  console.log("fetchConversations done");
+  await prefetchMe();
+  console.log("prefetchMe done");
+  openWebsocket();
+  loading.value = false;
 })
+
+onUnmounted(async() => {
+  closeWebsocket();
+});
+
+function openWebsocket(){
+  ws = new WebSocket("/api/ws")
+  ws.onopen = function(event){
+    console.log("onopen");
+    ws!.send(JSON.stringify({"cmd": "login", "data": {"token": useAuthStore().token }}));
+  }
+
+  ws.onmessage = function(event){
+    const messageObj = JSON.parse(event.data);
+    console.log(messageObj);
+    if(messageObj.cmd == "message"){
+      handleMessage(messageObj.data as Message);
+    }
+  }
+
+  ws.onclose = async function(e){
+    console.log("onclose", e);
+  }
+
+  ws.onerror = async function(e){
+    console.log("onerror", e);
+  }
+}
+
+function closeWebsocket(){
+  if(ws){
+    ws.close();
+    ws = null;
+  }
+}
+
+type MessageHandler = (message:Message)=>{};
+const messageHandler = ref<MessageHandler | null>(null);
+async function handleMessage(message: Message){
+  let chat = conversationsStore.openedChatList.find(c => c.channel.channel_id == message.channel_id);
+
+  if(chat && chat.channel.last_update < message.created_at){
+    chat.channel.last_update = message.created_at;
+  }
+
+  if(messageHandler.value && messageHandler.value(message)){
+    return; // message was handled by active Messages component
+  }
+
+  console.log("background message: ", message);
+  if(!chat){
+    chat = await conversationsStore.openOpenedChat(message.channel_id);
+  }
+}
+
+provide('setMessageHandler', (h: MessageHandler) => {messageHandler.value = h});
+
+async function closeButton(channelId: string){
+  let currentChannelId = Array.isArray(route.params.channelId) ? route.params.channel_id[0] : route.params.channelId;
+  console.log("closeButton", channelId, route.name, currentChannelId);
+  const success = await conversationsStore.closeOpenedChat(channelId);
+  if(success && currentChannelId == channelId){
+    console.log("current chat closed, redirecting to /friends");
+    router.push("/friends");
+  }
+}
 
 </script>
 
 
 <template>
-  <div class="app">
+  <div v-if="!loading" class="app">
     <div class="sidebar-left">
       <div class="sidebar-section">
         <!--<div class="sidebar-header">Servers</div>
@@ -27,13 +111,15 @@ onMounted( async () => {
           <RouterLink class="add-btn" to="/user-search">+</RouterLink>
         </div>
         <div class="opened-friend-chat">
-          <div v-for="chat, id in conversationsStore.list" :key="id">
-            <RouterLink :to="`/chat/user/${chat.userid}`">{{ chat.username }}</RouterLink>
-
+          <div v-if="!conversationsStore.isLoading" v-for="chat, id in conversationsStore.openedChatList.sort((a, b) => b.channel.last_update - a.channel.last_update)" :key="id" class="chat">
+            <RouterLink :to="`/chat/${chat.channel.channel_id}`">{{ chat.users[0].username }}</RouterLink>
+            <button v-on:click="closeButton(chat.channel.channel_id)" class="close-button">X</button>
+          </div>
+          <div v-else>
+            Loading conversation list...
           </div>
         </div>
       </div>
-
     </div>
 
     <main class="content">
@@ -56,7 +142,13 @@ onMounted( async () => {
           <i class="icon settings-icon"></i>
         </button>
       </header>
+      <button v-on:click="authStore.logout" class="logout-btn">
+        Logout
+      </button>
     </div>
+  </div>
+  <div v-else>
+    Loading...
   </div>
 </template>
   
@@ -66,6 +158,7 @@ onMounted( async () => {
 .opened-friend-chat {
   display: block;
 }
+
 
 .app {
   display: flex;
@@ -89,6 +182,7 @@ onMounted( async () => {
   flex-direction: column;
   padding: 10px;
   flex: 0 0 auto;
+  height: 100vh;
 }
 
 .sidebar-section {
@@ -152,5 +246,30 @@ a.sidebar-header {
 
 .icon-btn:hover {
   color: white;
+}
+
+.close-button{
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: hsla(160, 100%, 37%, 1)
+}
+.close-button:hover{
+  color: white;
+  cursor: pointer;
+}
+
+.logout-btn{
+  margin-top: auto;
+  border: none;
+  background: none;
+  color: white;
+}
+.logout-btn:hover{
+  cursor: pointer;
+  color: rgb(137, 115, 158);
+}
+.chat{
+  display: flex;
 }
 </style>

@@ -14,7 +14,7 @@ const {user, actions, clickable} = defineProps<{
   <div class="user">
     <img class="avatar" src="@/assets/default.png" alt="User Avatar" width="40"/>
     <div class="username" :title="user.username">
-      <RouterLink v-if="clickable" :to="`/chat/user/${user.userid}`">{{ user.username }}</RouterLink>
+      <RouterLink v-if="clickable" :to="`/chat-user/${user.userid}`">{{ user.username }}</RouterLink>
       <span v-else>{{ user.username }}</span>
     </div>
     <div>
