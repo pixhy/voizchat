@@ -5,6 +5,7 @@ from util.ulidtype import ULIDType
 from ulid import ULID
 from enum import Enum
 from model.user import User
+from model.message import Message
 class Channel(SQLModel, table=True):
     __tablename__ : str = "channels"
     id: int | None = Field(default=None, primary_key=True)
@@ -32,6 +33,7 @@ class ChannelUser(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     channel_id: ULID = Field(default_factory=ULID, sa_column=Column(ULIDType))
     user_id: ULID = Field(default_factory=ULID, sa_column=Column(ULIDType))
+    last_read_message_id: int | None = Field(foreign_key="messages.id")
     @staticmethod
     def find_user_channel(session: Session, user1: str, user2: str) -> Channel | None:
         query = text("""
@@ -46,3 +48,18 @@ class ChannelUser(SQLModel, table=True):
         if result:
             return session.get(Channel, result[0])
         return None
+    @staticmethod
+    def update_last_read_message_id(session: Session, user: str, message: Message) -> None:
+        query = text("""
+            UPDATE channel_users 
+            SET last_read_message_id = :message_id 
+            WHERE channel_id = :channel_id 
+            AND user_id = :user_id
+            AND (last_read_message_id IS NULL OR last_read_message_id < :message_id)
+        """).params(
+            user_id = user,
+            message_id = message.id,
+            channel_id = str(message.channel_id)
+        )
+        session.exec(query)
+        session.commit()

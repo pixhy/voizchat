@@ -15,6 +15,8 @@ class OpenedChat(SQLModel, table=True):
 
     __table_args__ = (UniqueConstraint("user_id", "channel_id", name="uix_user_id_target_id"),)
 
+
 class OpenedChatResponse(BaseModel):
     channel: Channel
     users: list[UserInfo]
+    unread_count: int = 0

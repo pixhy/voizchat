@@ -19,7 +19,7 @@ const loading = ref<boolean>(true);
 onMounted( async () => {
   console.log("MainLayout mounted");
   if(loading.value == false){
-    console.log("loading is already false THIS IS BAD!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.log("loading is already false THIS IS BAD!");
   }
   await conversationsStore.fetchConversations();
   console.log("fetchConversations done");
@@ -33,11 +33,17 @@ onUnmounted(async() => {
   closeWebsocket();
 });
 
+function sendWebsocketCommand(command: string, data: any){
+  ws!.send(JSON.stringify({"cmd": command, "data": data}));
+}
+provide('sendWebsocketCommand', sendWebsocketCommand);
+
+
 function openWebsocket(){
   ws = new WebSocket("/api/ws")
   ws.onopen = function(event){
     console.log("onopen");
-    ws!.send(JSON.stringify({"cmd": "login", "data": {"token": useAuthStore().token }}));
+    sendWebsocketCommand("login", {"token": useAuthStore().token });
   }
 
   ws.onmessage = function(event){
@@ -81,6 +87,7 @@ async function handleMessage(message: Message){
   if(!chat){
     chat = await conversationsStore.openOpenedChat(message.channel_id);
   }
+  chat.unread_count++;
 }
 
 provide('setMessageHandler', (h: MessageHandler) => {messageHandler.value = h});
@@ -113,6 +120,7 @@ async function closeButton(channelId: string){
         <div class="opened-friend-chat">
           <div v-if="!conversationsStore.isLoading" v-for="chat, id in conversationsStore.openedChatList.sort((a, b) => b.channel.last_update - a.channel.last_update)" :key="id" class="chat">
             <RouterLink :to="`/chat/${chat.channel.channel_id}`">{{ chat.users[0].username }}</RouterLink>
+            <div v-if="chat.unread_count>0" class="unread-message">{{ chat.unread_count > 9  ? '9+' : chat.unread_count }}</div>
             <button v-on:click="closeButton(chat.channel.channel_id)" class="close-button">X</button>
           </div>
           <div v-else>
@@ -272,4 +280,18 @@ a.sidebar-header {
 .chat{
   display: flex;
 }
+.unread-message {
+    background-color: red;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    align-self: center;
+}
+
 </style>

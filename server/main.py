@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response,  WebSocket, WebSocketDisconnect, status, WebSocketException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select, text
 from base64 import b64encode, b64decode
 import jwt
 from fastapi.encoders import jsonable_encoder
@@ -20,10 +20,11 @@ from model.friend_list import FriendListEntry
 from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 
+
 import logging
-logging.basicConfig()
-sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
-sqlalchemy_logging.setLevel(logging.DEBUG)
+#logging.basicConfig()
+#sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
+#sqlalchemy_logging.setLevel(logging.DEBUG)
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 
@@ -177,6 +178,16 @@ async def get_active_user_by_token(token: str, session: Session):
 
 
 manager = ConnectionManager()
+
+async def receive_websocket_cmd(ws: WebSocket):
+    data = await ws.receive_json()
+    print("command from client: ", data)
+    try:
+        return data["cmd"], data["data"]
+    except Exception as e:
+        print(e)
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
 @app.websocket("/api/ws")
 async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
     await websocket.accept()
@@ -197,7 +208,13 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
     await manager.connect(websocket, current_user)
     try:
         while True:
-            await websocket.receive_text()
+            (cmd, data) = await receive_websocket_cmd(websocket)
+            if cmd == "read_message":
+                message_id = data.get("message_id")
+                message = session.get(Message, message_id)
+                print("message",message)
+                print("message_id", message_id)
+                ChannelUser.update_last_read_message_id(session, str(current_user.userid), message)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -425,11 +442,25 @@ async def get_opened_chats(current_user:UserDep, session: SessionDep) -> list[Op
         .join(OpenedChat, Channel.channel_id == OpenedChat.channel_id)
         .where(OpenedChat.user_id == current_user.userid)
     ).all()
+
+    unread_messages_count_query=text(
+    '''
+        SELECT COUNT(*) AS count, messages.channel_id
+        FROM messages
+        JOIN channel_users ON messages.channel_id = channel_users.channel_id
+        WHERE channel_users.user_id = :userid AND
+        channel_users.last_read_message_id < messages.id
+        GROUP BY messages.channel_id;
+    ''').params(userid = str(current_user.userid))
+
+    unread_messages_result = session.exec(unread_messages_count_query).all()
+    unread_messages_dict = {row.channel_id: row.count for row in unread_messages_result}
+
     return [
         OpenedChatResponse(channel = channel, users=[
             UserInfo.from_user(user)
             for user in channel.get_users(session, current_user)
-        ])
+        ], unread_count=unread_messages_dict.get(str(channel.channel_id), 0))
         for channel in channels
     ]
 
@@ -473,7 +504,7 @@ UserDep, session: SessionDep) -> OpenedChatResponse:
         return OpenedChatResponse(channel = channel, users=[
             UserInfo.from_user(user)
             for user in channel.get_users(session, current_user)
-        ])
+        ], unread_count=0)
     else:
         raise HTTPException(status_code=400, detail="Chat already exists")
 

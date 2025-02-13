@@ -13,6 +13,7 @@ interface Channel{
 export interface OpenedChat {
   channel: Channel;
   users: User[];
+  unread_count: number;
 }
 
 interface ConversationsState {

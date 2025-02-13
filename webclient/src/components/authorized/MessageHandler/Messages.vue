@@ -7,6 +7,7 @@ import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { useConversationsStore, type OpenedChat } from '@/stores/opened_chats'
 
 export interface Message {
+  id: number,
   channel_id: string;
   sender_id: string;
   message: string;
@@ -17,6 +18,7 @@ const route = useRoute();
 const conversationsStore = useConversationsStore();
 
 const setMessageHandler = inject('setMessageHandler') as (handler: any) => {};
+const sendWebsocketCommand = inject('sendWebsocketCommand') as (command: string, data: any) => {};
 
 let channelId = Array.isArray(route.params.channelId) ? route.params.channel_id[0] : route.params.channelId;
 
@@ -58,11 +60,21 @@ async function loadMessages(){
 
   const messagesResponse = await fetchWrapper.get(`/api/messages/${channelId}?limit=20`)
   if(messagesResponse.success){
-    messages.value = messagesResponse.value
+    messages.value = messagesResponse.value;
     needScrollToBottom = true;
     console.log(messagesResponse.value);
   }
+  else {
+    console.log("failed to load messages");
+    return;
+  }
   
+  if(messages.value && messages.value.length > 0){
+    sendWebsocketCommand("read_message", {"message_id": messages.value[messages.value.length - 1].id});
+  }
+
+  chatInfo.value.unread_count = 0;
+
   loaded.value = true;
 }
 
@@ -74,8 +86,11 @@ onUpdated(() => {
 });
 
 function onMessage(message: Message): boolean{
-  if(message.channel_id !== channelId) return false;
-
+  if(message.channel_id !== channelId) {
+    return false;
+  }
+  sendWebsocketCommand("read_message", {"message_id": message.id});
+  
   if(me!.userid !== message.sender_id){
     addMessage(message);
   }
@@ -96,7 +111,8 @@ async function sendMessage(e : Event) {
         chatInfo.value.channel.last_update = message.created_at
       }
       addMessage(message);
-      newMessage.value = ""; 
+      newMessage.value = "";
+      sendWebsocketCommand("read_message", {"message_id": message.id})
     }
   }
 };
