@@ -35,6 +35,7 @@ export default defineComponent({
             v-model="email"
             placeholder="Enter your email"
             required
+            class="auth-input"
           />
         </div>
         <button type="submit" class="auth-button">Send recovery email</button>

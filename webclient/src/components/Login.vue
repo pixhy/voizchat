@@ -30,6 +30,7 @@ const handleLogin = async () => {
             v-model="email"
             placeholder="Enter your email"
             required
+            class="auth-input"
           />
         </div>
 
@@ -42,6 +43,7 @@ const handleLogin = async () => {
               v-model="password"
               placeholder="Enter your password"
               required
+              class="auth-input"
             />
             <button
               type="button"

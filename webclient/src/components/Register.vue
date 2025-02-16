@@ -40,11 +40,11 @@ export default defineComponent({
       <form @submit.prevent="onSubmit"  class="auth-form">
         <div class="form-group">
           <label for="email">E-Mail address:</label>
-          <input type="email" id="email" v-model="email" required />
+          <input type="email" id="email" v-model="email" required class="auth-input"/>
         </div>
         <div class="form-group">
           <label for="username">Username:</label>
-          <input type="text" id="username" v-model="username" required />
+          <input type="text" id="username" v-model="username" required class="auth-input"/>
         </div>
 
 
@@ -57,6 +57,7 @@ export default defineComponent({
               v-model="password"
               placeholder="Enter your password"
               required
+              class="auth-input"
             />
             <button
               type="button"

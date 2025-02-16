@@ -45,7 +45,7 @@
     text-align: left;
   }
   
-  input {
+  .auth-input {
     width: 100%;
     padding: 0.5rem;
     border: 1px solid #ddd;
