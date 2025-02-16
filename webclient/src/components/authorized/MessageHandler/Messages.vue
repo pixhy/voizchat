@@ -159,57 +159,56 @@ function convertDateToString(timestamp: number): string {
       />
       <button v-on:click="sendMessage" class="send-button">Send</button>
     </div>
-  </template>
+</template>
   
 
   
-  <style scoped>
-  .chat-messages {
-    flex: 1;
-    padding: 10px;
-    overflow-y: auto;
-    height: 94%;
-  }
-  
-  .message {
-    margin-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .message-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-  }
-  
-  .avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    margin-right: 10px;
-  }
-  
-  .username {
-    font-weight: bold;
-    margin-right: 10px;
-  }
-  
-  .timestamp {
-    font-size: 0.85rem;
-    color: gray;
-  }
-  
-  .message-content {
-    background-color: #2c2f33;
-    padding: 10px;
-    border-radius: 5px;
-    color: white;
-  }
-
-  .chat-input {
-  display: flex;
+<style scoped>
+.chat-messages {
+  flex: 1;
   padding: 10px;
+  overflow-y: auto;
+  height: 94%;
+}
+
+.message {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.username {
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.timestamp {
+  font-size: 0.85rem;
+  color: gray;
+}
+
+.message-content {
+  background-color: #2c2f33;
+  padding: 10px;
+  border-radius: 5px;
+  color: white;
+}
+
+.chat-input {
+  display: flex;
   background-color: #2c2f33;
   align-items: center;
   border-top: 1px solid #444;
@@ -235,5 +234,5 @@ function convertDateToString(timestamp: number): string {
 .send-button:hover {
   background-color: #4752c4;
 }
-  </style>
+</style>
   
