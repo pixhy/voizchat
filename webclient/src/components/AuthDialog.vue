@@ -8,7 +8,7 @@
   </div>
 </template>
     
-<style>
+<style scoped>
   .auth-page {
     display: flex;
     justify-content: center;
@@ -29,23 +29,17 @@
     color: #fff;
   }
   
-  .title {
-    margin-bottom: 1.5rem;
-    font-size: 2rem;
-    color: #fff;
-  }
-  
-  .auth-form {
+  :slotted(.auth-form) {
     display: flex;
     flex-direction: column;
   }
   
-  .form-group {
+  :slotted(.form-group) {
     margin-bottom: 1rem;
     text-align: left;
   }
   
-  .auth-input {
+  :slotted(.auth-input) {
     width: 100%;
     padding: 0.5rem;
     border: 1px solid #ddd;
@@ -54,16 +48,16 @@
     background-color: #ddd;
   }
   
-  .password-container {
+  :slotted(.password-container) {
     display: flex;
     align-items: center;
     position: relative;
   }
-  .password-container input{
+  :slotted(.password-container input){
     padding-right: 32px;
   }
   
-  .toggle-password {
+  :slotted(.toggle-password) {
     background: none;
     border: none;
     margin-left: 0.5rem;
@@ -74,14 +68,14 @@
     right: 0px;
   }
   
-  .forgot-password {
+  :slotted(.forgot-password) {
     font-size: 0.9rem;
     color: #1e90ff;
     text-decoration: none;
     text-align: left;
   }
   
-  .auth-button {
+  :slotted(.auth-button) {
     margin-top: 1rem;
     padding: 0.5rem;
     border: none;
@@ -92,12 +86,12 @@
     cursor: pointer;
   }
   
-  .signup-container {
+  :slotted(.signup-container) {
     margin-top: 1rem;
     font-size: 0.9rem;
   }
   
-  .google-button {
+  :slotted(.google-button) {
     margin-top: 1rem;
     padding: 0.5rem;
     border: 1px solid #ddd;
@@ -108,10 +102,10 @@
     cursor: pointer;
   }
 
-  .pw-requirement{
+  :slotted(.pw-requirement){
     text-align: left;
   }
-  .forgot-pw{
+  :slotted(.forgot-pw){
     margin-bottom: 15px;
     text-align: left;
   }
