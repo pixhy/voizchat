@@ -3,37 +3,14 @@ import { ref, onMounted } from 'vue';
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { isSuccess } from '@/helpers/result';
 import Friend from '@/components/authorized/FriendHandler/Friend.vue'
+import { type FriendAction } from './FriendContents/_common';
+import { type User } from '@/helpers/users'
 
-const {endpoint, actions, clickable} = defineProps<{
-  endpoint: string,
-  actions: Record<string, (user: any) => void>
+const {users, actions, clickable} = defineProps<{
+  users: User[],
+  actions: FriendAction[],
   clickable: boolean
 }>();
-
-const users = ref<any[]>([]);
-
-async function getUsers() {
-  try {
-    const response = await fetchWrapper.get(endpoint);
-    if (isSuccess(response)) {
-      users.value = response.value;
-    } else {
-      console.error("Failed to fetch list:", response);
-    }
-  } catch (error) {
-    console.error("Error while fetching list:", error);
-  }
-}
-
-function removeUser(user: any){
-  users.value = users.value.filter(u => u.userid !== user.userid);
-}
-
-defineExpose({getUsers, removeUser});
-
-onMounted(() => {
-  getUsers();
-});
 
 </script>
 

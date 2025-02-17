@@ -16,7 +16,7 @@ from email_service import send_verification_email
 from model.opened_chat import OpenedChat, OpenedChatResponse
 from services.websocket_manager import ConnectionManager
 from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
-from model.friend_list import FriendListEntry
+from model.friend_list import FriendListEntry, FriendStateUpdate
 from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 
@@ -320,7 +320,7 @@ def find_user_by_name(username: str, session: SessionDep) -> UserInfo:
     return UserInfo.from_user(user)
 
 @app.post("/api/user/add-friend/{user_id}", status_code=201)
-def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
+async def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
     if user_id == current_user.userid:
         raise HTTPException(status_code=400, detail="Cannot add yourself as a friend")
 
@@ -340,6 +340,16 @@ def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
         friend_entry = FriendListEntry(user_id=current_user.id, friend_id=friend.id)
         session.add(friend_entry)
         session.commit()
+        await manager.broadcast_to_user(
+            current_user.userid,
+            "friend-state-update",
+            FriendStateUpdate(other_user=UserInfo.from_user(friend), new_state="request-outgoing")
+        )
+        await manager.broadcast_to_user(
+            friend.userid,
+            "friend-state-update",
+            FriendStateUpdate(other_user=UserInfo.from_user(current_user), new_state="request-incoming")
+        )
         return {"message": "Friend request sent"}
 
     if friend_entry.pending:
@@ -347,6 +357,17 @@ def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
             friend_entry.pending = False
             friend_entry.date_added = int(time.time())
             session.commit()
+
+            await manager.broadcast_to_user(
+                current_user.userid,
+                "friend-state-update",
+                FriendStateUpdate(other_user=UserInfo.from_user(friend), new_state="accept-incoming")
+            )
+            await manager.broadcast_to_user(
+                friend.userid,
+                "friend-state-update",
+                FriendStateUpdate(other_user=UserInfo.from_user(current_user), new_state="accept-outgoing")
+            )
             return {"message": "Friend request accepted."}
         else:
             raise HTTPException(status_code=400, detail="Friend request already sent. Wait for the other user to accept your friend request.")
@@ -354,7 +375,7 @@ def add_friend(user_id: str, session: SessionDep, current_user: UserDep):
         raise HTTPException(status_code=400, detail="User already in friends")
 
 @app.post("/api/user/remove-friend/{user_id}", status_code=204)
-def remove_friend(user_id: str, session: SessionDep, current_user: UserDep):
+async def remove_friend(user_id: str, session: SessionDep, current_user: UserDep):
     friend = session.exec(select(User).where(User.userid == user_id)).first()
     if not friend:
         raise HTTPException(status_code=404, detail="User not found")
@@ -371,6 +392,42 @@ def remove_friend(user_id: str, session: SessionDep, current_user: UserDep):
 
     if not entry:
         raise HTTPException(status_code=404, detail="User not a friend")
+
+    if entry.pending:
+        is_outgoing = entry.friend_id == friend.id
+        if is_outgoing:
+            # current_user unsent a friend request
+            state_user = "remove-outgoing"
+            state_friend = "remove-incoming"
+
+        else:
+            # current_user rejected a friend request
+            state_user = "remove-incoming"
+            state_friend = "remove-outgoing"
+
+        await manager.broadcast_to_user(
+            current_user.userid,
+            "friend-state-update",
+             FriendStateUpdate(other_user=UserInfo.from_user(friend), new_state=state_user)
+        )
+        await manager.broadcast_to_user(
+            friend.userid,
+            "friend-state-update",
+             FriendStateUpdate(other_user=UserInfo.from_user(current_user), new_state=state_friend)
+        )
+
+    else:
+
+        await manager.broadcast_to_user(
+            current_user.userid,
+            "friend-state-update",
+             FriendStateUpdate(other_user=UserInfo.from_user(friend), new_state="remove-friend")
+        )
+        await manager.broadcast_to_user(
+            friend.userid,
+            "friend-state-update",
+             FriendStateUpdate(other_user=UserInfo.from_user(current_user), new_state="remove-friend")
+        )
 
     session.delete(entry)
     session.commit()

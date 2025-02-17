@@ -33,13 +33,12 @@ class ConnectionManager:
             user_list.remove(websocket)
 
     async def broadcast_to_user(self, user_id: str, command: str, obj: BaseModel):
-        print("user:", user_id, "websockets: ", self.active_connections)
+        print("broadcast to user", user_id, command)
         websockets = self.active_connections.get(user_id)
         json_str = Message(cmd=command, data=obj).model_dump_json()
         if websockets:
             for websocket in websockets:
                 if websocket.client_state == WebSocketState.CONNECTED:
-                    print("sending to websocket", websocket, json_str)
                     await websocket.send_text(json_str)
         else:
             print("no websockets for user", user_id)

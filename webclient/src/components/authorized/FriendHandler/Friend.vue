@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
+import { type FriendAction } from './FriendContents/_common';
+
 
 const {user, actions, clickable} = defineProps<{
   user: any,
-  actions: Record<string, (user: any) => void>,
+  actions: FriendAction[],
   clickable: boolean
 }>();
 
@@ -19,16 +21,17 @@ const {user, actions, clickable} = defineProps<{
     </div>
     <div>
       <button
-        v-for="[buttonText, callback] in Object.entries(actions)"
+        v-for="action of actions"
         class="action-button"
-        v-on:click="callback(user)">
-          {{ buttonText }}
+        :disabled="action.disabled"
+        v-on:click="action.onClick(user)">
+          {{ action.buttonText }}
       </button>
     </div>
   </div>
 </template>
 
-<style>
+<style scoped>
 
 .user {
   margin-top: 25px;
@@ -68,5 +71,8 @@ const {user, actions, clickable} = defineProps<{
 
 .action-button:hover {
   background-color: #218838;
+}
+.action-button:disabled {
+  background-color: gray;
 }
 </style>

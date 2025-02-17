@@ -1,4 +1,6 @@
 ﻿from sqlmodel import Field, SQLModel
+from pydantic import BaseModel
+from model.user import UserInfo
 
 
 class FriendListEntry(SQLModel, table=True):
@@ -8,3 +10,8 @@ class FriendListEntry(SQLModel, table=True):
     friend_id: int = Field(foreign_key="user.id")
     pending: bool = True
     date_added: int | None
+
+
+class FriendStateUpdate(BaseModel):
+    other_user: UserInfo
+    new_state: str # accept-outgoing, accept-incoming, request-incoming, request-outgoing, remove-friend, remove-incoming, remove-outgoing

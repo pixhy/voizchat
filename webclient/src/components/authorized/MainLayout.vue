@@ -8,9 +8,12 @@ import { type Message } from './MessageHandler/Messages.vue'
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { useRoute } from 'vue-router';
 import router from '@/router/index.ts'
+import { useFriendsStore, type FriendStateUpdate } from '@/stores/friends.store';
+
 
 const authStore = useAuthStore();
 let conversationsStore = useConversationsStore();
+const friendStore = useFriendsStore();
 const route = useRoute();
 let ws: WebSocket | null = null;
 
@@ -21,6 +24,7 @@ onMounted( async () => {
   if(loading.value == false){
     console.log("loading is already false THIS IS BAD!");
   }
+  await friendStore.fetchFriends();
   await conversationsStore.fetchConversations();
   console.log("fetchConversations done");
   await prefetchMe();
@@ -51,6 +55,9 @@ function openWebsocket(){
     console.log(messageObj);
     if(messageObj.cmd == "message"){
       handleMessage(messageObj.data as Message);
+    }
+    else if(messageObj.cmd == "friend-state-update"){
+      friendStore.updateFriendState(messageObj.data as FriendStateUpdate)
     }
   }
 

@@ -3,9 +3,14 @@ import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { ref } from 'vue';
 import { isSuccess } from '@/helpers/result';
 import Friend from '@/components/authorized/FriendHandler/Friend.vue'
+import { FriendAction } from './FriendHandler/FriendContents/_common';
+import { useFriendsStore, FriendState } from '@/stores/friends.store';
+import { type User } from '@/helpers/users';
+
+const friendsStore = useFriendsStore();
 
 const username = ref('');
-const searchedUser = ref<any>(null);
+const searchedUser = ref<User | null>(null);
 const errorMessage = ref('');
 
 async function handleSearch(){
@@ -19,12 +24,32 @@ async function handleSearch(){
   }
 };
 
-async function addFriend (user: any){
+async function addFriend(user: any) {
   const response = await fetchWrapper.post(`/api/user/add-friend/${user.userid}`);
   if (response != null) {
     console.log(response);
   }
 };
+
+function getButtons(){
+  const friendState = friendsStore.getFriendState(searchedUser.value!.userid);
+  let text;
+  switch(friendState) {
+    case FriendState.Friend: 
+      text = 'Already friends'; 
+      break;
+    case FriendState.IncomingRequest: 
+      text = 'Accept request'; 
+      break;
+    case FriendState.OutgoingRequest: 
+      text = 'Request sent'; 
+      break;
+    default: text = 'Add friend';
+  }
+  const isDisabled = friendState != FriendState.Unknown && friendState != FriendState.IncomingRequest;
+  return [new FriendAction(text, addFriend, isDisabled)]
+}
+
 </script>
 
 <template>
@@ -33,14 +58,18 @@ async function addFriend (user: any){
         <button class="search-button">Search</button>
     </form>
     <div class="search-result">
-      <Friend v-if="searchedUser" :user="searchedUser" :actions="{'Add friend': addFriend}" :clickable="false"/>
+      <Friend 
+        v-if="searchedUser"
+        :user="searchedUser"
+        :actions="getButtons()"
+        :clickable="false"/>
       <div v-else-if="errorMessage" class="user-not-found">
         <div>{{ errorMessage }}</div>
       </div>
     </div>
 </template>
 
-<style>
+<style scoped>
 
 .search-form {
   display: flex;

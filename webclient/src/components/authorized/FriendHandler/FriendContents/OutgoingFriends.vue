@@ -2,23 +2,23 @@
 import { ref } from 'vue';
 import FriendNavigation from '../FriendNavigation.vue';
 import FriendItems from '../FriendItems.vue'
-import { removeFriend } from './_common'
+import { removeFriend, FriendAction } from './_common'
+import { useFriendsStore } from '@/stores/friends.store';
 
-const outgoingFriends = ref<any | null>(null);
+const friendsStore = useFriendsStore();
 
-const actions = {
-  'X': (user: any) => removeFriend(user, outgoingFriends),
-};
+const actions = [
+  new FriendAction('X', removeFriend, false),
+];
 
 </script>
 
 <template>
   <FriendNavigation />
   <FriendItems
-   endpoint="/api/user/outgoing-friend-requests"
+   :users="friendsStore.outgoingFriendRequests"
    :actions="actions"
-   :clickable="false"
-   ref="outgoingFriends">
+   :clickable="false">
     <template #empty>
       No pending requests.
     </template>

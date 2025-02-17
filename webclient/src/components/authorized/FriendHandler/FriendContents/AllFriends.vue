@@ -2,13 +2,15 @@
 import { ref } from 'vue';
 import FriendNavigation from '../FriendNavigation.vue';
 import FriendItems from '../FriendItems.vue'
-import { removeFriend } from './_common'
+import { removeFriend, FriendAction } from './_common'
+import { useFriendsStore } from '@/stores/friends.store';
 
-const allFriends = ref<any | null>(null);
+const actions = [
+  new FriendAction('Remove friend', removeFriend, false),
+]
 
-const actions = {
-  'Remove friend': (user: any) => removeFriend(user, allFriends),
-};
+const friendsStore = useFriendsStore();
+
 
 </script>
 
@@ -16,10 +18,9 @@ const actions = {
 <template>
   <FriendNavigation />
   <FriendItems
-    endpoint="/api/user/get-friends"
+    :users="friendsStore.friendList"
     :actions="actions"
-    :clickable="true"
-    ref="allFriends">
+    :clickable="true">
     <template #empty>
       No friends found.
     </template>
