@@ -32,6 +32,7 @@ export const useAuthStore = defineStore('auth', {
             let response = await fetchWrapper.post(`${baseUrl}/register`, { email, username, password });
             if(isSuccess(response)){
                 this.token = response.value.token;
+                this.userinfo = response.value.user;
                 localStorage.setItem('voizchat-token', this.token!);
                 localStorage.setItem('voizchat-userinfo', JSON.stringify(this.userinfo));
                 return null;

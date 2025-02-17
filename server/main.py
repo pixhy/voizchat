@@ -235,7 +235,7 @@ def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[st
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
-    return jsonable_encoder({"token": token})
+    return jsonable_encoder({"token": token, "user": UserInfo.from_user(user)})
 
 @app.get("/api/users/verify/{verification_code}")
 def verify_user(verification_code: str, session: SessionDep):
