@@ -33,7 +33,6 @@ class ConnectionManager:
             user_list.remove(websocket)
 
     async def broadcast_to_user(self, user_id: str, command: str, obj: BaseModel):
-        print("broadcast to user", user_id, command)
         websockets = self.active_connections.get(user_id)
         json_str = Message(cmd=command, data=obj).model_dump_json()
         if websockets:

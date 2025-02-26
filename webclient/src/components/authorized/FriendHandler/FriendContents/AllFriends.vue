@@ -5,13 +5,11 @@ import FriendItems from '../FriendItems.vue'
 import { removeFriend, FriendAction } from './_common'
 import { useFriendsStore } from '@/stores/friends.store';
 
+const friendsStore = useFriendsStore();
+
 const actions = [
   new FriendAction('Remove friend', removeFriend, false),
 ]
-
-const friendsStore = useFriendsStore();
-
-
 </script>
 
 

@@ -19,7 +19,7 @@ from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, U
 from model.friend_list import FriendListEntry, FriendStateUpdate
 from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
-
+from model.whiteboard import WhiteboardDrawData
 
 import logging
 #logging.basicConfig()
@@ -181,7 +181,6 @@ manager = ConnectionManager()
 
 async def receive_websocket_cmd(ws: WebSocket):
     data = await ws.receive_json()
-    print("command from client: ", data)
     try:
         return data["cmd"], data["data"]
     except Exception as e:
@@ -212,9 +211,18 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
             if cmd == "read_message":
                 message_id = data.get("message_id")
                 message = session.get(Message, message_id)
-                print("message",message)
-                print("message_id", message_id)
                 ChannelUser.update_last_read_message_id(session, str(current_user.userid), message)
+            elif cmd == "whiteboard":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                if channel:
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "whiteboard",
+                        WhiteboardDrawData(**data),
+                        current_user
+                    )
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

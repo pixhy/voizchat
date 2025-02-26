@@ -5,6 +5,7 @@ import { getMe, type User } from '@/helpers/users'
 import { ref } from 'vue';
 import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { useConversationsStore, type OpenedChat } from '@/stores/opened_chats'
+import Whiteboard from '@/components/WhiteBoard/Whiteboard.vue';
 
 export interface Message {
   id: number,
@@ -30,6 +31,7 @@ let needScrollToBottom = true;
 const bottomElement = ref<HTMLElement | null>(null);
 
 let me: User | null = null;
+const showWhiteBoard = ref<boolean>(false);
 
 onBeforeRouteUpdate(async (to, from) => {
   console.log("onBeforeRouteUpdate", from, to);
@@ -133,9 +135,11 @@ function convertDateToString(timestamp: number): string {
 </script>
 
 <template>
-    <div v-if="chatInfo">
+  <div class="channel-container">
+    <div v-if="chatInfo"> 
       chat with {{ chatInfo.users[0].username }}
     </div>
+    <Whiteboard v-if="showWhiteBoard" />
     <div class="chat-messages" v-if="loaded">
       <div class="message" v-for="(msg, index) in messages" :key="index">
         <div class="message-header">
@@ -158,17 +162,26 @@ function convertDateToString(timestamp: number): string {
         class="input-field" 
       />
       <button v-on:click="sendMessage" class="send-button">Send</button>
+      <button v-on:click="showWhiteBoard = true" class="send-button">Whiteboard</button>
     </div>
+  </div>
 </template>
   
 
   
 <style scoped>
+.channel-container{
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: center;
+}
+
 .chat-messages {
   flex: 1;
   padding: 10px;
   overflow-y: auto;
-  height: 94%;
+  width: 99%;
 }
 
 .message {
@@ -212,6 +225,7 @@ function convertDateToString(timestamp: number): string {
   background-color: #2c2f33;
   align-items: center;
   border-top: 1px solid #444;
+  width: 99%;
 }
 
 .input-field {

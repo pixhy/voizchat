@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { fetchWrapper } from '@/helpers/fetch-wrapper';
-import { isSuccess } from '@/helpers/result';
 import Friend from '@/components/authorized/FriendHandler/Friend.vue'
 import { type FriendAction } from './FriendContents/_common';
 import { type User } from '@/helpers/users'

@@ -5,11 +5,10 @@ import { useConversationsStore } from '@/stores/opened_chats'
 import { prefetchMe } from '@/helpers/users';
 import { onMounted, onUnmounted, ref, provide } from 'vue';
 import { type Message } from './MessageHandler/Messages.vue'
-import { fetchWrapper } from '@/helpers/fetch-wrapper';
 import { useRoute } from 'vue-router';
 import router from '@/router/index.ts'
 import { useFriendsStore, type FriendStateUpdate } from '@/stores/friends.store';
-
+import { type DrawData } from '../WhiteBoard/Whiteboard.vue';
 
 const authStore = useAuthStore();
 let conversationsStore = useConversationsStore();
@@ -59,6 +58,9 @@ function openWebsocket(){
     else if(messageObj.cmd == "friend-state-update"){
       friendStore.updateFriendState(messageObj.data as FriendStateUpdate)
     }
+    else if(messageObj.cmd == "whiteboard"){
+      handleDrawing(messageObj.data as DrawData)
+    }
   }
 
   ws.onclose = async function(e){
@@ -98,6 +100,15 @@ async function handleMessage(message: Message){
 }
 
 provide('setMessageHandler', (h: MessageHandler) => {messageHandler.value = h});
+
+type DrawHandler = (drawData: DrawData) =>{}
+const drawHandler = ref<DrawHandler | null>(null);
+async function handleDrawing(drawData: DrawData){
+  if(drawHandler.value && drawHandler.value(drawData)){
+    return;
+  }
+}
+provide('setWhiteBoardHandler', (h: DrawHandler) => {drawHandler.value = h})
 
 async function closeButton(channelId: string){
   let currentChannelId = Array.isArray(route.params.channelId) ? route.params.channel_id[0] : route.params.channelId;
