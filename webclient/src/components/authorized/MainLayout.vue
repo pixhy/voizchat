@@ -369,21 +369,4 @@ a.sidebar-header {
   align-self: center;
 }
 
-@media (max-width: 1024px) {
-  .sidebar-right {
-    width: 100px;
-  }
-
-  .sidebar-left {
-    width: 100px;
-  }
-
-  .content {
-    width: calc(100% - 200px);
-  }
-
-  .app {
-    width: 80%;
-  }
-}
 </style>
