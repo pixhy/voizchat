@@ -116,7 +116,7 @@ function getButtons() {
     opacity: 0;
     transform: scale(0.8);
   }
-  80% {
+  30% {
     opacity: 0;
     transform: scale(0.8);
   }
