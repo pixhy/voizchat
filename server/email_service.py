@@ -2,9 +2,13 @@
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Email configuration
 sender_email = os.getenv("GMAIL_ADDRESS")
+
 password = os.getenv("GMAIL_PASSWORD")  # Use an app-specific password for Gmail
 
 webclient_base_url = os.getenv("WEBCLIENT_BASE_URL") or "http://localhost:5173"
