@@ -20,14 +20,15 @@ from model.friend_list import FriendListEntry, FriendStateUpdate
 from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
+from dotenv import load_dotenv
 
 import logging
 #logging.basicConfig()
 #sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
 #sqlalchemy_logging.setLevel(logging.DEBUG)
+load_dotenv()
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
-
 print(f"Using database: {sqlite_url}")
 engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
@@ -118,16 +119,17 @@ app.add_middleware(
 )
 
 
+
 jwt_public_key = os.getenv("AUTH_JWT_PUBKEY")
 if jwt_public_key:
-    jwt_public_key = f'-----BEGIN PUBLIC KEY-----\n{jwt_public_key}\n-----END PUBLIC KEY-----\n'
+    jwt_public_key = f'-----BEGIN PUBLIC KEY-----\n{jwt_public_key}\n-----END PUBLIC KEY-----'
 else:
     with open("public_key.pem", "r") as public_file:
         jwt_public_key = public_file.read()
 
 jwt_private_key = os.getenv("AUTH_JWT_PRIVKEY")
 if jwt_private_key:
-    jwt_private_key = f'-----BEGIN PRIVATE KEY-----\n{jwt_private_key}\n-----END PRIVATE KEY-----\n'
+    jwt_private_key = f'-----BEGIN PRIVATE KEY-----\n{jwt_private_key}\n-----END PRIVATE KEY-----'
 else:
     with open("private_key.pem", "r") as private_file:
         jwt_private_key = private_file.read()
@@ -227,23 +229,31 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
         manager.disconnect(websocket)
 
 
-
-@app.post("/api/users/register")
-def create_user(user_request: CreateUserRequest, session: SessionDep) -> dict[str, str]:
+@app.post("/api/users/register", response_model=dict)
+def create_user(user_request: CreateUserRequest, session: SessionDep):
     user = User(email=user_request.email, username=user_request.username)
     user.passwordhash = hash_password(user_request.password)
-    session.commit()
-    user.verification_code = os.urandom(20).hex()
-    user.verification_code_expiration = int(time.time()) + 60*60*24 #one day
-    send_verification_email(user_request.email, user.verification_code)
     session.add(user)
     session.commit()
     session.refresh(user)
-    one_week_in_seconds = 60*60*24*7
+
+    user.verification_code = os.urandom(20).hex()
+    user.verification_code_expiration = int(time.time()) + 60 * 60 * 24  # one day
+    send_verification_email(user_request.email, user.verification_code)
+
+    session.commit()
+
+    one_week_in_seconds = 60 * 60 * 24 * 7
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
-    return jsonable_encoder({"token": token, "user": UserInfo.from_user(user)})
+
+    response = {
+        "token": token,
+        "user": UserInfo(userid=str(user.userid), username=user.username)
+    }
+
+    return response
 
 @app.get("/api/users/verify/{verification_code}")
 def verify_user(verification_code: str, session: SessionDep):
@@ -259,16 +269,22 @@ def verify_user(verification_code: str, session: SessionDep):
     raise HTTPException(status_code=404, detail="Verification code not found")
 
 
-@app.post("/api/users/login")
+@app.post("/api/users/login", response_model=dict)
 def login_user(user_request: LoginRequest, session: SessionDep):
     user = session.exec(select(User).where(User.email == user_request.email)).first()
+
     if not user or not verify_password_hash(user.passwordhash, user_request.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    one_week_in_seconds = 60*60*24*7
+
+    one_week_in_seconds = 60 * 60 * 24 * 7
     expiration = int(time.time()) + one_week_in_seconds
     payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
-    return jsonable_encoder({"token": token, "user": UserInfo.from_user(user)})
+
+    return {
+        "token": token,
+        "user": UserInfo(userid=str(user.userid), username=user.username)
+    }
 
 @app.post("/api/users/token")
 def login_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> dict[str, str]:
