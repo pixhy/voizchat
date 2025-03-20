@@ -128,28 +128,32 @@ function onMessage(message: Message): boolean {
 }
 
 const newMessage = ref("");
+let sending = false;
 
 async function sendMessage(e: Event) {
   e.preventDefault();
-  if (newMessage.value.length > 0) {
-    const messageObj = { message: newMessage.value };
-    const postMessage = await fetchWrapper.post(
-      `/api/message/${channelId}`,
-      messageObj
-    );
-    if (postMessage.success) {
-      const message = postMessage.value as Message;
-      if (
-        chatInfo.value &&
-        chatInfo.value.channel.last_update < message.created_at
-      ) {
-        chatInfo.value.channel.last_update = message.created_at;
-      }
-      addMessage(message);
-      newMessage.value = "";
-      sendWebsocketCommand("read_message", { message_id: message.id });
+  if (sending || newMessage.value.length === 0) return;
+
+  sending = true;
+  const messageObj = { message: newMessage.value };
+  const postMessage = await fetchWrapper.post(
+    `/api/message/${channelId}`,
+    messageObj
+  );
+
+  if (postMessage.success) {
+    const message = postMessage.value as Message;
+    if (
+      chatInfo.value &&
+      chatInfo.value.channel.last_update < message.created_at
+    ) {
+      chatInfo.value.channel.last_update = message.created_at;
     }
+    addMessage(message);
+    newMessage.value = "";
+    sendWebsocketCommand("read_message", { message_id: message.id });
   }
+  sending = false;
 }
 
 function scrollToBottom() {
