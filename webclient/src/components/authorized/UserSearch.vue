@@ -186,7 +186,7 @@ function getButtons() {
 }
 
 /* Mobile */
-@media (max-width: 600px) {
+/* @media (max-width: 600px) {
   .search-form {
     flex-direction: column;
     align-items: stretch;
@@ -205,5 +205,5 @@ function getButtons() {
     width: 100%;
     margin-top: 15px;
   }
-}
+} */
 </style>

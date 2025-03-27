@@ -22,6 +22,27 @@ let ws: WebSocket | null = null;
 
 const activateWhiteboard = ref<boolean>(false);
 
+let calling = ref(false); // Hívás állapota
+let timer = ref(0); // Számlálóhoz
+let interval: any; // Számláló interval
+
+const startCall = () => {
+  calling.value = true; // Elindítja a hívást
+  sendWebsocketCommand("start_call", { userId: 1 });
+
+  interval = setInterval(() => {
+    timer.value += 1; // Frissíti a számlálót
+  }, 1000);
+};
+
+const endCall = () => {
+  calling.value = false; // Leállítja a hívást
+  sendWebsocketCommand("end_call", { userId: 1 });
+
+  clearInterval(interval); // Leállítja a számlálót
+  timer.value = 0; // Nullázza a számlálót
+};
+
 const loading = ref<boolean>(true);
 
 const hasActiveChat = computed(() => {
@@ -217,6 +238,16 @@ async function closeButton(channelId: string) {
       >
         {{ eventBus.whiteboardButtonText }}
       </button>
+      <div class="call-container">
+        <button v-if="!calling" @click="startCall" class="call-button">
+          Start Call
+        </button>
+        <div v-else class="call-info">
+          <span>Calling...</span>
+          <span class="timer">{{ timer }}s</span>
+          <button @click="endCall" class="end-call-button">End Call</button>
+        </div>
+      </div>
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
     </div>
   </div>
@@ -369,7 +400,44 @@ a.sidebar-header {
   align-self: center;
 }
 
-@media (max-width: 1024px) {
+.call-container {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.call-button,
+.end-call-button {
+  padding: 10px 20px;
+  background-color: #5865f2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.call-button:hover,
+.end-call-button:hover {
+  background-color: #4752c4;
+}
+
+.call-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timer {
+  font-size: 1.2rem;
+  margin-top: 5px;
+  color: green;
+}
+
+/* @media (max-width: 1024px) {
   .sidebar-right {
     width: 100px;
   }
@@ -385,5 +453,5 @@ a.sidebar-header {
   .app {
     width: 80%;
   }
-}
+} */
 </style>

@@ -136,7 +136,7 @@ function eraseColor(newColor: string) {
   <div class="whiteboard">
     <canvas
       ref="canvas"
-      width="1024"
+      width="800"
       height="400"
       @mousedown="startDrawing"
       @mousemove="draw"
@@ -233,6 +233,13 @@ function eraseColor(newColor: string) {
   display: flex;
   flex-direction: column;
 }
+
+/* .canvas {
+  width: 100%;
+  max-width: 100%;
+  height: 400px;
+  border: 1px solid #000;
+} */
 
 .whiteboard {
   display: flex;

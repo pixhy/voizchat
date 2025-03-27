@@ -3,3 +3,4 @@ sqlmodel
 pyjwt[crypto]
 python-ulid[pydantic]
 websockets
+aiortc

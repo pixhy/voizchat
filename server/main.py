@@ -22,11 +22,15 @@ from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
 
+from services.webrtc_manager import WebRTCManager
+
 import logging
 #logging.basicConfig()
 #sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
 #sqlalchemy_logging.setLevel(logging.DEBUG)
 load_dotenv()
+
+webrtc_manager = WebRTCManager()
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 print(f"Using database: {sqlite_url}")
@@ -605,3 +609,22 @@ async def delete_opened_chat(channel_id: str, current_user: UserDep, session: Se
             return Response(status_code=204)
         else:
             raise HTTPException(status_code=404, detail="Chat not found")
+        
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    user = User(userid=user_id)
+    await manager.connect(websocket, user)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            if data.startswith("offer"):
+                await webrtc_manager.handle_offer(websocket, data.split(" ", 1)[1])
+            elif data.startswith("answer"):
+                await webrtc_manager.handle_answer(websocket, data.split(" ", 1)[1])
+            elif data.startswith("candidate"):
+                await webrtc_manager.handle_candidate(websocket, data.split(" ", 1)[1])
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print(f"User {user_id} disconnected.")
