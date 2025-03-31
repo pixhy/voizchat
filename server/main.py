@@ -21,6 +21,7 @@ from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
+from model.call import CallInvite, CallAnswer
 
 import logging
 #logging.basicConfig()
@@ -225,6 +226,45 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
                         WhiteboardDrawData(**data),
                         current_user
                     )
+            elif cmd == "call-invite":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                if channel:
+                    offer = data.get("offer")
+                    if not offer or "type" not in offer or "sdp" not in offer:
+                        print("Invalid offer received:", offer)
+                        continue
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-invite",
+                        CallInvite(caller_id=str(current_user.userid), offer=offer),
+                        current_user
+                    )
+            elif cmd == "call-answer":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+
+                if channel:
+                    answer = data.get("answer")
+                    if not answer or "type" not in answer or "sdp" not in answer:
+                        print("Invalid answer received:", answer)
+                        continue
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-answer",
+                        CallAnswer(caller_id=str(current_user.userid), answer=answer),
+                        current_user
+                    )
+            elif cmd == "call-ice-candidate":
+                target_id = data.get("target_id")
+                candidate = data.get("candidate")
+
+                if target_id and candidate:
+                    await manager.broadcast_to_user(target_id, "call-ice-candidate", {
+                        "candidate": candidate
+                    })
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

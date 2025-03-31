@@ -3,7 +3,7 @@ import { RouterView } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useConversationsStore } from "@/stores/opened_chats";
 import { prefetchMe } from "@/helpers/users";
-import { onMounted, onUnmounted, ref, provide, computed, nextTick } from "vue";
+import { onMounted, onUnmounted, ref, provide, computed, nextTick, inject } from "vue";
 import { type Message } from "./MessageHandler/Messages.vue";
 import { useRoute } from "vue-router";
 import router from "@/router/index.ts";
@@ -14,6 +14,8 @@ import {
 } from "@/stores/friends.store";
 import Whiteboard, { type DrawData } from "../WhiteBoard/Whiteboard.vue";
 
+import Call from "../Call/Call.vue"
+import { startCall, handleOffer, handleAnswer, handleIceCandidate } from "@/helpers/webrtc";
 const authStore = useAuthStore();
 let conversationsStore = useConversationsStore();
 const friendStore = useFriendsStore();
@@ -21,6 +23,15 @@ const route = useRoute();
 let ws: WebSocket | null = null;
 
 const activateWhiteboard = ref<boolean>(false);
+const isCalling = ref<boolean>(false);
+
+function getChannelId(){
+  let currentChannelId = Array.isArray(route.params.channelId)
+  ? route.params.channel_id[0]
+  : route.params.channelId;
+  console.log(currentChannelId)
+  return currentChannelId
+}
 
 const loading = ref<boolean>(true);
 
@@ -76,12 +87,20 @@ function openWebsocket() {
   ws.onmessage = function (event) {
     const messageObj = JSON.parse(event.data);
     console.log(messageObj);
-    if (messageObj.cmd == "message") {
-      handleMessage(messageObj.data as Message);
-    } else if (messageObj.cmd == "friend-state-update") {
-      friendStore.updateFriendState(messageObj.data as FriendStateUpdate);
-    } else if (messageObj.cmd == "whiteboard") {
-      handleDrawing(messageObj.data as DrawData);
+      if (messageObj.cmd === "message") {
+        handleMessage(messageObj.data as Message);
+    } else if (messageObj.cmd === "friend-state-update") {
+        friendStore.updateFriendState(messageObj.data as FriendStateUpdate);
+    } else if (messageObj.cmd === "whiteboard") {
+        handleDrawing(messageObj.data as DrawData);
+    } else if (messageObj.cmd === "call-invite") {
+        console.log("Received call-invite", messageObj);
+        console.log("handleOffer function:", handleOffer);
+        handleOffer(messageObj.data.offer, getChannelId(), sendWebsocketCommand);
+    } else if (messageObj.cmd === "call-answer") {
+        handleAnswer(messageObj.data.answer);
+    } else if (messageObj.type === "call-ice-candidate") {
+        handleIceCandidate(messageObj.data.candidate);
     }
   };
 
@@ -137,6 +156,14 @@ async function handleDrawing(drawData: DrawData) {
 provide("setWhiteBoardHandler", (h: DrawHandler) => {
   drawHandler.value = h;
 });
+
+
+function handleCall() {
+
+  startCall(getChannelId(), sendWebsocketCommand);
+  isCalling.value = true
+  console.log("handleCall ")
+}
 
 async function closeButton(channelId: string) {
   let currentChannelId = Array.isArray(route.params.channelId)
@@ -217,6 +244,10 @@ async function closeButton(channelId: string) {
       >
         {{ eventBus.whiteboardButtonText }}
       </button>
+      <button @click="handleCall">
+        Start Call
+      </button>
+      <Call v-if="isCalling" />
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
     </div>
   </div>
