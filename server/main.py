@@ -21,16 +21,13 @@ from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
-
-from services.webrtc_manager import WebRTCManager
+from model.call import CallAnswer, CallInvite
 
 import logging
 #logging.basicConfig()
 #sqlalchemy_logging = logging.getLogger('sqlalchemy.engine')
 #sqlalchemy_logging.setLevel(logging.DEBUG)
 load_dotenv()
-
-webrtc_manager = WebRTCManager()
 
 sqlite_url = os.getenv("DATABASE_URL") or "sqlite:///data/voizchat.db"
 print(f"Using database: {sqlite_url}")
@@ -227,6 +224,65 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
                         channel,
                         "whiteboard",
                         WhiteboardDrawData(**data),
+                        current_user
+                    )
+            elif cmd == "call-invite":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                if channel:
+                    offer = data.get("offer")
+                    print(offer)
+                    if not offer or "type" not in offer or "sdp" not in offer:
+                        print("Invalid offer received:", offer)
+                        continue
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-invite",
+                        CallInvite(caller_id=str(current_user.userid), offer=offer),
+                        current_user
+                    )
+            elif cmd == "call-answer":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                print("channel", channel)
+
+                answer = data.get("answer")
+                print("answer", answer)
+                if channel:
+                    answer = data.get("answer")
+                    if not answer or "type" not in answer or "sdp" not in answer:
+                        print("Invalid answer received:", answer)
+                        continue
+                await manager.broadcast_to_channel(
+                    session,
+                    channel,
+                    "call-answer",
+                    CallAnswer(caller_id=str(current_user.userid), answer=answer),
+                    current_user
+                )
+            elif cmd == "call-decline":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                if channel:
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-decline",
+                        {"caller_id": str(current_user.userid)},
+                        current_user
+                    )
+            elif cmd == "call-ice-candidate":
+                channel_id = data.get("channel_id")
+                candidate = data.get("candidate")
+
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                if channel and candidate:
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-ice-candidate",
+                        {"candidate": candidate},
                         current_user
                     )
     except WebSocketDisconnect:
@@ -609,22 +665,3 @@ async def delete_opened_chat(channel_id: str, current_user: UserDep, session: Se
             return Response(status_code=204)
         else:
             raise HTTPException(status_code=404, detail="Chat not found")
-        
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    user = User(userid=user_id)
-    await manager.connect(websocket, user)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            
-            if data.startswith("offer"):
-                await webrtc_manager.handle_offer(websocket, data.split(" ", 1)[1])
-            elif data.startswith("answer"):
-                await webrtc_manager.handle_answer(websocket, data.split(" ", 1)[1])
-            elif data.startswith("candidate"):
-                await webrtc_manager.handle_candidate(websocket, data.split(" ", 1)[1])
-            
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print(f"User {user_id} disconnected.")
