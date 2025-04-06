@@ -21,7 +21,7 @@ from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
-from model.call import CallAnswer, CallInvite
+from model.call import CallInvite, CallAnswer
 
 import logging
 #logging.basicConfig()
@@ -231,7 +231,6 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
                 channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
                 if channel:
                     offer = data.get("offer")
-                    print(offer)
                     if not offer or "type" not in offer or "sdp" not in offer:
                         print("Invalid offer received:", offer)
                         continue
@@ -245,46 +244,27 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
             elif cmd == "call-answer":
                 channel_id = data.get("channel_id")
                 channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
-                print("channel", channel)
 
-                answer = data.get("answer")
-                print("answer", answer)
                 if channel:
                     answer = data.get("answer")
                     if not answer or "type" not in answer or "sdp" not in answer:
                         print("Invalid answer received:", answer)
                         continue
-                await manager.broadcast_to_channel(
-                    session,
-                    channel,
-                    "call-answer",
-                    CallAnswer(caller_id=str(current_user.userid), answer=answer),
-                    current_user
-                )
-            elif cmd == "call-decline":
-                channel_id = data.get("channel_id")
-                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
-                if channel:
                     await manager.broadcast_to_channel(
                         session,
                         channel,
-                        "call-decline",
-                        {"caller_id": str(current_user.userid)},
+                        "call-answer",
+                        CallAnswer(caller_id=str(current_user.userid), answer=answer),
                         current_user
                     )
             elif cmd == "call-ice-candidate":
-                channel_id = data.get("channel_id")
+                target_id = data.get("target_id")
                 candidate = data.get("candidate")
 
-                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
-                if channel and candidate:
-                    await manager.broadcast_to_channel(
-                        session,
-                        channel,
-                        "call-ice-candidate",
-                        {"candidate": candidate},
-                        current_user
-                    )
+                if target_id and candidate:
+                    await manager.broadcast_to_user(target_id, "call-ice-candidate", {
+                        "candidate": candidate
+                    })
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

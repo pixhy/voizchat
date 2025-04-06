@@ -1,38 +1,54 @@
 <script setup lang="ts">
-import { RouterView, useRoute } from "vue-router";
+import { RouterView } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useConversationsStore } from "@/stores/opened_chats";
 import { prefetchMe } from "@/helpers/users";
-import { onMounted, onUnmounted, ref, provide, computed, nextTick } from "vue";
+import {
+  onMounted,
+  onUnmounted,
+  ref,
+  provide,
+  computed,
+  nextTick,
+  inject,
+} from "vue";
+import { type Message } from "./MessageHandler/Messages.vue";
+import { useRoute } from "vue-router";
+import router from "@/router/index.ts";
 import { eventBus } from "@/eventBus";
 import {
   useFriendsStore,
   type FriendStateUpdate,
 } from "@/stores/friends.store";
-import type { Message } from "./MessageHandler/Messages.vue";
-import type { DrawData } from "../WhiteBoard/Whiteboard.vue";
+import Whiteboard, { type DrawData } from "../WhiteBoard/Whiteboard.vue";
+
 import Call from "../Call/Call.vue";
 import {
-  initPeerConnection,
+  startCall,
   handleOffer,
   handleAnswer,
   handleIceCandidate,
 } from "@/helpers/webrtc";
-import router from "@/router/index.ts";
-
 const authStore = useAuthStore();
-const conversationsStore = useConversationsStore();
+let conversationsStore = useConversationsStore();
 const friendStore = useFriendsStore();
 const route = useRoute();
-
 let ws: WebSocket | null = null;
 
-const incomingCall = ref(false);
-const activateWhiteboard = ref(false);
-const isCalling = ref(false);
+const activateWhiteboard = ref<boolean>(false);
+const isCalling = ref<boolean>(false);
+const incomingCall = ref<boolean>(false);
 const incomingOffer = ref<RTCSessionDescriptionInit | null>(null);
 
-const loading = ref(true);
+function getChannelId() {
+  let currentChannelId = Array.isArray(route.params.channelId)
+    ? route.params.channel_id[0]
+    : route.params.channelId;
+  console.log(currentChannelId);
+  return currentChannelId;
+}
+
+const loading = ref<boolean>(true);
 
 const hasActiveChat = computed(() => {
   return conversationsStore.openedChatList.some(
@@ -40,38 +56,8 @@ const hasActiveChat = computed(() => {
   );
 });
 
-function getChannelId() {
-  return Array.isArray(route.params.channelId)
-    ? route.params.channelId[0]
-    : route.params.channelId;
-}
-
-async function handleCall() {
-  const currentChannelId = getChannelId();
-
-  const pc = initPeerConnection(sendWebsocketCommand, currentChannelId);
-
-  const localStream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: true,
-  });
-
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
-  });
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  sendWebsocketCommand("call-invite", {
-    channel_id: currentChannelId,
-    offer,
-  });
-
-  isCalling.value = true;
-}
-
 function toggleWhiteboard() {
+  console.log("Toggling whiteboard. Current state:", activateWhiteboard.value);
   activateWhiteboard.value = !activateWhiteboard.value;
 
   nextTick(() => {
@@ -79,36 +65,43 @@ function toggleWhiteboard() {
     eventBus.whiteboardButtonText = activateWhiteboard.value
       ? "Close Whiteboard"
       : "Whiteboard";
+    console.log("Updated whiteboard state:", eventBus.showWhiteboard);
   });
 }
 
 onMounted(async () => {
+  console.log("MainLayout mounted");
+  if (loading.value == false) {
+    console.log("loading is already false THIS IS BAD!");
+  }
   await friendStore.fetchFriends();
   await conversationsStore.fetchConversations();
+  console.log("fetchConversations done");
   await prefetchMe();
+  console.log("prefetchMe done");
   openWebsocket();
   loading.value = false;
 });
 
-onUnmounted(() => {
+onUnmounted(async () => {
   closeWebsocket();
 });
 
 function sendWebsocketCommand(command: string, data: any) {
-  ws!.send(JSON.stringify({ cmd: command, data }));
+  ws!.send(JSON.stringify({ cmd: command, data: data }));
 }
 provide("sendWebsocketCommand", sendWebsocketCommand);
 
 function openWebsocket() {
   ws = new WebSocket("/api/ws");
-
-  ws.onopen = () => {
-    sendWebsocketCommand("login", { token: authStore.token });
+  ws.onopen = function (event) {
+    console.log("onopen");
+    sendWebsocketCommand("login", { token: useAuthStore().token });
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = function (event) {
     const messageObj = JSON.parse(event.data);
-
+    console.log(messageObj);
     if (messageObj.cmd === "message") {
       handleMessage(messageObj.data as Message);
     } else if (messageObj.cmd === "friend-state-update") {
@@ -116,14 +109,27 @@ function openWebsocket() {
     } else if (messageObj.cmd === "whiteboard") {
       handleDrawing(messageObj.data as DrawData);
     } else if (messageObj.cmd === "call-invite") {
+      console.log("Received call-invite", messageObj);
+      console.log("handleOffer function:", handleOffer);
       incomingOffer.value = messageObj.data.offer;
+      //isCalling.value = true;
       incomingCall.value = true;
+      //handleOffer(messageObj.data.offer, getChannelId(), sendWebsocketCommand);
+
+      isCalling.value = true;
     } else if (messageObj.cmd === "call-answer") {
       handleAnswer(messageObj.data.answer);
-      isCalling.value = true;
-    } else if (messageObj.cmd === "call-ice-candidate") {
+    } else if (messageObj.type === "call-ice-candidate") {
       handleIceCandidate(messageObj.data.candidate);
     }
+  };
+
+  ws.onclose = async function (e) {
+    console.log("onclose", e);
+  };
+
+  ws.onerror = async function (e) {
+    console.log("onerror", e);
   };
 }
 
@@ -134,6 +140,8 @@ function closeWebsocket() {
   }
 }
 
+type MessageHandler = (message: Message) => {};
+const messageHandler = ref<MessageHandler | null>(null);
 async function handleMessage(message: Message) {
   let chat = conversationsStore.openedChatList.find(
     (c) => c.channel.channel_id == message.channel_id
@@ -142,50 +150,61 @@ async function handleMessage(message: Message) {
   if (chat && chat.channel.last_update < message.created_at) {
     chat.channel.last_update = message.created_at;
   }
+
+  if (messageHandler.value && messageHandler.value(message)) {
+    return; // message was handled by active Messages component
+  }
+
+  console.log("background message: ", message);
+  if (!chat) {
+    chat = await conversationsStore.openOpenedChat(message.channel_id);
+  }
+  chat.unread_count++;
 }
 
-async function handleDrawing(drawData: DrawData) {}
+provide("setMessageHandler", (h: MessageHandler) => {
+  messageHandler.value = h;
+});
+
+type DrawHandler = (drawData: DrawData) => {};
+const drawHandler = ref<DrawHandler | null>(null);
+async function handleDrawing(drawData: DrawData) {
+  if (drawHandler.value && drawHandler.value(drawData)) {
+    return;
+  }
+}
+provide("setWhiteBoardHandler", (h: DrawHandler) => {
+  drawHandler.value = h;
+});
+
+function handleCall() {
+  isCalling.value = true;
+  startCall(getChannelId(), sendWebsocketCommand);
+  console.log("handleCall ");
+}
+
+function acceptCall() {
+  console.log("Call accepted");
+  incomingCall.value = false;
+  isCalling.value = true;
+
+  if (incomingOffer.value) {
+    handleOffer(incomingOffer.value, getChannelId(), sendWebsocketCommand);
+  } else {
+    console.warn("No incoming offer to accept.");
+  }
+}
 
 async function closeButton(channelId: string) {
+  let currentChannelId = Array.isArray(route.params.channelId)
+    ? route.params.channel_id[0]
+    : route.params.channelId;
+  console.log("closeButton", channelId, route.name, currentChannelId);
   const success = await conversationsStore.closeOpenedChat(channelId);
-  if (success && getChannelId() == channelId) {
+  if (success && currentChannelId == channelId) {
+    console.log("current chat closed, redirecting to /friends");
     router.push("/friends");
   }
-}
-
-async function acceptCall() {
-  incomingCall.value = false;
-  const currentChannelId = getChannelId();
-
-  const pc = initPeerConnection(sendWebsocketCommand, currentChannelId);
-
-  const localStream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: true,
-  });
-
-  // Add saját stream
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
-  });
-
-  // Add meg a videónak (a saját kép megjelenítéséhez is hasznos lehet)
-  const localVideo = document.getElementById("localVideo") as HTMLVideoElement;
-  if (localVideo) {
-    localVideo.srcObject = localStream;
-  }
-
-  await handleOffer(
-    incomingOffer.value!,
-    currentChannelId,
-    sendWebsocketCommand
-  );
-
-  isCalling.value = true;
-}
-
-function declineCall() {
-  incomingCall.value = false;
 }
 </script>
 
@@ -213,7 +232,6 @@ function declineCall() {
             <RouterLink :to="`/chat/${chat.channel.channel_id}`">{{
               chat.users[0].username
             }}</RouterLink>
-
             <div v-if="chat.unread_count > 0" class="unread-message">
               {{ chat.unread_count > 9 ? "9+" : chat.unread_count }}
             </div>
@@ -256,14 +274,13 @@ function declineCall() {
       >
         {{ eventBus.whiteboardButtonText }}
       </button>
-      <button v-if="!isCalling" @click="handleCall">Start Call</button>
-      <div v-if="incomingCall" class="incoming-call">
-        <p>Incoming call</p>
-        <button @click="acceptCall">Accept</button>
-        <button @click="declineCall">Decline</button>
+      <button @click="handleCall">Start Call</button>
+      <div v-if="incomingCall">
+        <p>Incoming Call</p>
+        <button @click="acceptCall">Accept call</button>
+        <button @click="rejectCall">Reject call</button>
       </div>
       <Call v-if="isCalling" />
-
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
     </div>
   </div>
