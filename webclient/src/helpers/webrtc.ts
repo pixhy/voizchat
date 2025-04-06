@@ -4,35 +4,87 @@ import { ref } from "vue";
 const configuration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
-const peerConnection = ref<RTCPeerConnection | null>(new RTCPeerConnection(configuration));
-const remoteStream = ref<MediaStream | null>(null);
+export const peerConnection = ref<RTCPeerConnection | null>(null);
+export const remoteStream = ref<MediaStream | null>(null);
+export const localStream = ref<MediaStream | null>(null);
 
-export function initPeerConnection(sendWebsocketCommand: (cmd: string, data: any) => void) {
+const pendingCandidates: RTCIceCandidateInit[] = [];
+let remoteDescriptionSet = false;
+// Microphone volume tracking
+
+let audioContext: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+let micStream: MediaStream | null = null;
+export const micLevel = ref(0);
+export let animationFrameId: number | null = null;
+
+export async function initPeerConnection(channelId: string, sendWebsocketCommand: (cmd: string, data: any) => void) {
   console.log("test", peerConnection.value)
   if (!peerConnection.value) {
     peerConnection.value = new RTCPeerConnection(configuration);
-
-    console.log("peerconnection value", peerConnection.value)
-    peerConnection.value.onicecandidate = (event) => {
-      if (event.candidate) {
-        sendWebsocketCommand("call-ice-candidate", event.candidate);
-      }
-    };
-    peerConnection.value.ontrack = (event) => {
-      if (!remoteStream.value) {
-        remoteStream.value = new MediaStream();
-      }
-      remoteStream.value.addTrack(event.track);
-      console.log("Received remote track:", event.track);
-    };
-
-    console.log("Initialized peer connection:", peerConnection.value);
   }
+
+  // ✅ Add local media
+  localStream.value = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+  localStream.value.getTracks().forEach((track) => {
+    peerConnection.value?.addTrack(track, localStream.value!);
+  });
+
+  startMicVisualization(localStream.value!);
+
+  console.log("peerconnection value", peerConnection.value)
+  console.log("onice", peerConnection.value.onicecandidate)
+  peerConnection.value.onicecandidate = (event) => {
+    console.log("ICE Candidate Event:", event);
+    if (event.candidate) {
+      sendWebsocketCommand("call-ice-candidate", {
+        channel_id: channelId,
+        candidate: event.candidate});
+    }
+  };
+  
+  console.log("onice candidate handler set:", peerConnection.value.onicecandidate);
+  peerConnection.value.ontrack = (event) => {
+    if (!remoteStream.value) {
+      remoteStream.value = new MediaStream();
+    }
+    remoteStream.value.addTrack(event.track);
+    console.log("Received remote track:", event.track);
+  };
+
+  console.log("Initialized peer connection:", peerConnection.value);
   
 }
 
+export function startMicVisualization(stream: MediaStream) {
+  if (audioContext) {
+    audioContext.close();
+  }
+
+  audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const source = audioContext.createMediaStreamSource(stream);
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  function updateMicLevel() {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    micLevel.value = Math.max(...dataArray) / 255;
+
+    animationFrameId = requestAnimationFrame(updateMicLevel);
+  }
+
+  updateMicLevel();
+}
+
+
+
 export async function startCall(channelId: string, sendWebsocketCommand: (cmd: string, data: any) => void) {
-  initPeerConnection(sendWebsocketCommand);
+  initPeerConnection(channelId, sendWebsocketCommand);
 
   if (!peerConnection.value) {
     throw new Error("Peer connection not initialized.");
@@ -63,13 +115,22 @@ export async function createOffer(
 }
 
 export async function handleOffer(offer: RTCSessionDescriptionInit, channelId: string, sendWebsocketCommand: (type: string, data: any) => void) {
-  initPeerConnection(sendWebsocketCommand);
+  initPeerConnection(channelId, sendWebsocketCommand);
 
   if (!peerConnection.value) {
     throw new Error("Peer connection not initialized.");
   }
   console.log("OFFER", offer)
+
   await peerConnection.value.setRemoteDescription(offer);
+  remoteDescriptionSet = true;
+
+  // Add any buffered ICE candidates
+  for (const candidate of pendingCandidates) {
+    await peerConnection.value.addIceCandidate(candidate);
+  }
+  pendingCandidates.length = 0;
+
   const answer = await peerConnection.value.createAnswer();
   await peerConnection.value.setLocalDescription(answer);
 
@@ -85,9 +146,12 @@ export async function handleAnswer(answer: RTCSessionDescriptionInit){
   }
 }
 
-export async function handleIceCandidate(candidate: RTCIceCandidateInit){
+export async function handleIceCandidate(candidate: RTCIceCandidateInit) {
   if (peerConnection.value) {
-    await peerConnection.value.addIceCandidate(candidate);
+    if (remoteDescriptionSet) {
+      await peerConnection.value.addIceCandidate(candidate);
+    } else {
+      pendingCandidates.push(candidate);
+    }
   }
 }
-export { remoteStream, peerConnection };

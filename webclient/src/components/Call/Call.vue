@@ -1,76 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject, watch } from "vue";
-import { initPeerConnection, remoteStream, peerConnection } from "@/helpers/webrtc";
+import { ref, onMounted, onUnmounted, watch } from "vue";
+import { remoteStream, peerConnection, localStream, animationFrameId, micLevel } from "@/helpers/webrtc";
 
-const sendWebsocketCommand = inject("sendWebsocketCommand") as (
-  command: string,
-  data: any
-) => {};
-
-// Microphone volume tracking
-const micLevel = ref(0);
-let audioContext: AudioContext | null = null;
-let analyser: AnalyserNode | null = null;
-let micStream: MediaStream | null = null;
-let animationFrameId: number | null = null;
 const remoteVideo = ref<HTMLVideoElement | null>(null);
-
-
-const localStream = ref<MediaStream | null>(null);
-
-async function startLocalStream() {
-  try {
-    localStream.value = await navigator.mediaDevices.getUserMedia({
-      video: false,
-      audio: true,
-    });
-
-    localStream.value.getTracks().forEach((track) => {
-      peerConnection.value?.addTrack(track, localStream.value!);
-    });
-
-    startMicVisualization(localStream.value);
-  } catch (error) {
-    console.error("Error accessing media devices:", error);
-  }
-
-}
-
-function startMicVisualization(stream: MediaStream) {
-  if (audioContext) {
-    audioContext.close();
-  }
-
-  audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const source = audioContext.createMediaStreamSource(stream);
-  analyser = audioContext.createAnalyser();
-  analyser.fftSize = 256;
-  source.connect(analyser);
-
-  const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-  function updateMicLevel() {
-    if (!analyser) return;
-    analyser.getByteFrequencyData(dataArray);
-    micLevel.value = Math.max(...dataArray) / 255;
-
-    animationFrameId = requestAnimationFrame(updateMicLevel);
-  }
-
-  updateMicLevel();
-}
+const localVideo = ref<HTMLVideoElement | null>(null);
 
 onMounted(async () => {
 
-  initPeerConnection(sendWebsocketCommand);
+  watch(localStream, (stream) => {
+  if (localVideo.value && stream) {
+    localVideo.value.srcObject = stream;
+  }
+  });
 
-// Wait for the remote stream to be available
   watch(remoteStream, (stream) => {
     if (remoteVideo.value && stream) {
       remoteVideo.value.srcObject = stream;
     }
   });
-  await startLocalStream();
+
 });
 
 onUnmounted(() => {
@@ -84,7 +32,6 @@ onUnmounted(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
   }
-
 });
 
 
@@ -93,7 +40,7 @@ onUnmounted(() => {
 <template>
   <div>
     <h2>Call in Progress</h2>
-    <video ref="localVideo" autoplay playsinline></video>
+    <video ref="localVideo" autoplay playsinline muted></video>
     <video ref="remoteVideo" autoplay playsinline></video>
 
     <div class="mic-container">

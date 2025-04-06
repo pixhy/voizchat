@@ -7,3 +7,7 @@ class CallInvite(BaseModel):
 class CallAnswer(BaseModel):
     caller_id: str
     answer: dict
+
+class CallIceCandidate(BaseModel):
+    caller_id: str
+    candidate: dict

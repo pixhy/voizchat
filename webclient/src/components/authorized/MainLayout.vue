@@ -158,7 +158,7 @@ provide("setWhiteBoardHandler", (h: DrawHandler) => {
 });
 
 
-function handleCall() {
+async function handleCall() {
 
   startCall(getChannelId(), sendWebsocketCommand);
   isCalling.value = true
