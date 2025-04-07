@@ -3,7 +3,15 @@ import { RouterView } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useConversationsStore } from "@/stores/opened_chats";
 import { prefetchMe } from "@/helpers/users";
-import { onMounted, onUnmounted, ref, provide, computed, nextTick } from "vue";
+import {
+  onMounted,
+  onUnmounted,
+  ref,
+  provide,
+  computed,
+  nextTick,
+  inject,
+} from "vue";
 import { type Message } from "./MessageHandler/Messages.vue";
 import { useRoute } from "vue-router";
 import router from "@/router/index.ts";
@@ -14,6 +22,13 @@ import {
 } from "@/stores/friends.store";
 import Whiteboard, { type DrawData } from "../WhiteBoard/Whiteboard.vue";
 
+import Call from "../Call/Call.vue";
+import {
+  startCall,
+  handleOffer,
+  handleAnswer,
+  handleIceCandidate,
+} from "@/helpers/webrtc";
 const authStore = useAuthStore();
 let conversationsStore = useConversationsStore();
 const friendStore = useFriendsStore();
@@ -21,6 +36,17 @@ const route = useRoute();
 let ws: WebSocket | null = null;
 
 const activateWhiteboard = ref<boolean>(false);
+const isCalling = ref<boolean>(false);
+const incomingCall = ref<boolean>(false);
+const incomingOffer = ref<RTCSessionDescriptionInit | null>(null);
+
+function getChannelId() {
+  let currentChannelId = Array.isArray(route.params.channelId)
+    ? route.params.channel_id[0]
+    : route.params.channelId;
+  console.log(currentChannelId);
+  return currentChannelId;
+}
 
 const loading = ref<boolean>(true);
 
@@ -76,12 +102,22 @@ function openWebsocket() {
   ws.onmessage = function (event) {
     const messageObj = JSON.parse(event.data);
     console.log(messageObj);
-    if (messageObj.cmd == "message") {
+    if (messageObj.cmd === "message") {
       handleMessage(messageObj.data as Message);
-    } else if (messageObj.cmd == "friend-state-update") {
+    } else if (messageObj.cmd === "friend-state-update") {
       friendStore.updateFriendState(messageObj.data as FriendStateUpdate);
-    } else if (messageObj.cmd == "whiteboard") {
+    } else if (messageObj.cmd === "whiteboard") {
       handleDrawing(messageObj.data as DrawData);
+    } else if (messageObj.cmd === "call-invite") {
+      console.log("Received call-invite", messageObj);
+      console.log("handleOffer function:", handleOffer);
+      incomingOffer.value = messageObj.data.offer;
+      incomingCall.value = true;
+      //handleOffer(messageObj.data.offer, getChannelId(), sendWebsocketCommand);
+    } else if (messageObj.cmd === "call-answer") {
+      handleAnswer(messageObj.data.answer);
+    } else if (messageObj.type === "call-ice-candidate") {
+      handleIceCandidate(messageObj.data.candidate);
     }
   };
 
@@ -137,6 +173,31 @@ async function handleDrawing(drawData: DrawData) {
 provide("setWhiteBoardHandler", (h: DrawHandler) => {
   drawHandler.value = h;
 });
+
+async function handleCall() {
+  startCall(getChannelId(), sendWebsocketCommand);
+  isCalling.value = true;
+  console.log("handleCall ");
+}
+
+function acceptCall() {
+  console.log("Call accepted");
+  incomingCall.value = false;
+  isCalling.value = true;
+
+  if (incomingOffer.value) {
+    handleOffer(incomingOffer.value, getChannelId(), sendWebsocketCommand);
+  } else {
+    console.warn("No incoming offer to accept.");
+  }
+}
+
+function rejectCall() {
+  console.log("Call rejected");
+  incomingCall.value = false;
+  incomingOffer.value = null;
+  isCalling.value = false;
+}
 
 async function closeButton(channelId: string) {
   let currentChannelId = Array.isArray(route.params.channelId)
@@ -217,6 +278,28 @@ async function closeButton(channelId: string) {
       >
         {{ eventBus.whiteboardButtonText }}
       </button>
+      <button
+        v-if="hasActiveChat && !isCalling && !incomingCall"
+        @click="handleCall"
+        class="whiteboard-btn"
+      >
+        Start Call
+      </button>
+      <div v-if="incomingCall" class="incoming-call-container">
+        <div class="incoming-call-header">
+          <p>Incoming Call</p>
+          <span class="vibrate-icon">📞</span>
+        </div>
+        <div class="incoming-call-btn-container">
+          <button @click="acceptCall" class="accept-call-btn">
+            Accept call
+          </button>
+          <button @click="rejectCall" class="reject-call-btn">
+            Reject call
+          </button>
+        </div>
+      </div>
+      <Call v-if="isCalling" />
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
     </div>
   </div>
@@ -224,7 +307,8 @@ async function closeButton(channelId: string) {
 </template>
 
 <style scoped>
-.whiteboard-btn {
+.whiteboard-btn,
+.start-call-btn {
   margin-top: 10px;
   border: none;
   background-color: hsla(160, 100%, 37%, 1);
@@ -234,8 +318,100 @@ async function closeButton(channelId: string) {
   border-radius: 5px;
 }
 
-.whiteboard-btn:hover {
+.whiteboard-btn:hover,
+.start-call-btn:hover {
   background-color: hsla(160, 100%, 27%, 1);
+}
+
+.incoming-call-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #292b40;
+  padding: 20px;
+  border-radius: 5px;
+}
+
+.incoming-call-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.incoming-call-header p {
+  font-size: 18 px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.incoming-call-btn-container {
+  display: flex;
+  gap: 5px;
+}
+
+.accept-call-btn {
+  margin-top: 10px;
+  border: none;
+  background-color: hsla(160, 100%, 37%, 1);
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.accept-call-btn:hover {
+  background-color: hsla(160, 100%, 27%, 1);
+}
+
+.reject-call-btn {
+  margin-top: 10px;
+  border: none;
+  background-color: hsla(0, 100%, 50%, 1);
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.reject-call-btn:hover {
+  background-color: hsla(0, 100%, 40%, 1);
+}
+
+.accept-call-btn,
+.reject-call-btn {
+  padding: 4px 12px;
+  min-width: 80px;
+  font-size: 14px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: white;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.vibrate-icon {
+  animation: vibrate 0.2s linear infinite;
+}
+
+@keyframes vibrate {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-2px, -2px);
+  }
+  50% {
+    transform: translate(2px, -2px);
+  }
+  75% {
+    transform: translate(-2px, 2px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }
 
 .opened-friend-chat {
@@ -368,5 +544,4 @@ a.sidebar-header {
   align-items: center;
   align-self: center;
 }
-
 </style>
