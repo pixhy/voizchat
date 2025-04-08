@@ -184,26 +184,4 @@ function getButtons() {
   font-size: 16px;
   color: #fff;
 }
-
-/* Mobile */
-/* @media (max-width: 600px) {
-  .search-form {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .search-input {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-
-  .search-button {
-    width: 100%;
-  }
-
-  .user-not-found {
-    width: 100%;
-    margin-top: 15px;
-  }
-} */
 </style>

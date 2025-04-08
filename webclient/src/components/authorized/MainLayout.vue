@@ -112,11 +112,8 @@ function openWebsocket() {
       console.log("Received call-invite", messageObj);
       console.log("handleOffer function:", handleOffer);
       incomingOffer.value = messageObj.data.offer;
-      //isCalling.value = true;
       incomingCall.value = true;
       //handleOffer(messageObj.data.offer, getChannelId(), sendWebsocketCommand);
-
-      isCalling.value = true;
     } else if (messageObj.cmd === "call-answer") {
       handleAnswer(messageObj.data.answer);
     } else if (messageObj.type === "call-ice-candidate") {
@@ -177,9 +174,9 @@ provide("setWhiteBoardHandler", (h: DrawHandler) => {
   drawHandler.value = h;
 });
 
-function handleCall() {
-  isCalling.value = true;
+async function handleCall() {
   startCall(getChannelId(), sendWebsocketCommand);
+  isCalling.value = true;
   console.log("handleCall ");
 }
 
@@ -193,6 +190,13 @@ function acceptCall() {
   } else {
     console.warn("No incoming offer to accept.");
   }
+}
+
+function rejectCall() {
+  console.log("Call rejected");
+  incomingCall.value = false;
+  incomingOffer.value = null;
+  isCalling.value = false;
 }
 
 async function closeButton(channelId: string) {
@@ -274,11 +278,26 @@ async function closeButton(channelId: string) {
       >
         {{ eventBus.whiteboardButtonText }}
       </button>
-      <button @click="handleCall">Start Call</button>
-      <div v-if="incomingCall">
-        <p>Incoming Call</p>
-        <button @click="acceptCall">Accept call</button>
-        <button @click="rejectCall">Reject call</button>
+      <button
+        v-if="hasActiveChat && !isCalling && !incomingCall"
+        @click="handleCall"
+        class="whiteboard-btn"
+      >
+        Start Call
+      </button>
+      <div v-if="incomingCall" class="incoming-call-container">
+        <div class="incoming-call-header">
+          <p>Incoming Call</p>
+          <span class="vibrate-icon">📞</span>
+        </div>
+        <div class="incoming-call-btn-container">
+          <button @click="acceptCall" class="accept-call-btn">
+            Accept call
+          </button>
+          <button @click="rejectCall" class="reject-call-btn">
+            Reject call
+          </button>
+        </div>
       </div>
       <Call v-if="isCalling" />
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
@@ -288,7 +307,8 @@ async function closeButton(channelId: string) {
 </template>
 
 <style scoped>
-.whiteboard-btn {
+.whiteboard-btn,
+.start-call-btn {
   margin-top: 10px;
   border: none;
   background-color: hsla(160, 100%, 37%, 1);
@@ -298,8 +318,100 @@ async function closeButton(channelId: string) {
   border-radius: 5px;
 }
 
-.whiteboard-btn:hover {
+.whiteboard-btn:hover,
+.start-call-btn:hover {
   background-color: hsla(160, 100%, 27%, 1);
+}
+
+.incoming-call-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #292b40;
+  padding: 20px;
+  border-radius: 5px;
+}
+
+.incoming-call-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.incoming-call-header p {
+  font-size: 18 px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.incoming-call-btn-container {
+  display: flex;
+  gap: 5px;
+}
+
+.accept-call-btn {
+  margin-top: 10px;
+  border: none;
+  background-color: hsla(160, 100%, 37%, 1);
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.accept-call-btn:hover {
+  background-color: hsla(160, 100%, 27%, 1);
+}
+
+.reject-call-btn {
+  margin-top: 10px;
+  border: none;
+  background-color: hsla(0, 100%, 50%, 1);
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.reject-call-btn:hover {
+  background-color: hsla(0, 100%, 40%, 1);
+}
+
+.accept-call-btn,
+.reject-call-btn {
+  padding: 4px 12px;
+  min-width: 80px;
+  font-size: 14px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: white;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.vibrate-icon {
+  animation: vibrate 0.2s linear infinite;
+}
+
+@keyframes vibrate {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-2px, -2px);
+  }
+  50% {
+    transform: translate(2px, -2px);
+  }
+  75% {
+    transform: translate(-2px, 2px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }
 
 .opened-friend-chat {
