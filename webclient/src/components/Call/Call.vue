@@ -8,7 +8,12 @@ import {
   micLevel,
   localVideo,
   remoteVideo,
+  endCall,
 } from "@/helpers/webrtc";
+
+defineProps<{
+  outGoingCall: boolean;
+}>();
 
 onMounted(async () => {
   watch(localStream, (stream) => {
@@ -35,12 +40,19 @@ onUnmounted(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
   }
+  endCall();
 });
 </script>
 
 <template>
-  <div>
-    <h2>Call in Progress</h2>
+  <div lass="call-container">
+    <div class="call-header">
+      <h2 v-if="!outGoingCall">Call in Progress</h2>
+      <h2 v-else>
+        Calling
+        <span class="animated-heading">...</span>
+      </h2>
+    </div>
     <video
       ref="localVideo"
       class="local-video"
@@ -54,11 +66,50 @@ onUnmounted(() => {
       <div class="mic-bar" :style="{ width: micLevel * 100 + '%' }"></div>
     </div>
 
-    <button @click="$emit('endCall')">End Call</button>
+    <button @click="$emit('endCall')" class="end-call-btn">End Call</button>
   </div>
 </template>
 
 <style scoped>
+.call-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.call-container h2 {
+  font-size: bold;
+  font-size: 24px;
+}
+
+.call-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.animated-heading {
+  display: inline-block;
+  background: linear-gradient(90deg, #ffffff, #ff3385);
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shine 3s linear infinite;
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
 .local-video,
 .remote-video {
   width: 300px;
@@ -69,20 +120,6 @@ onUnmounted(() => {
 
 .controls {
   margin-top: 10px;
-}
-
-button {
-  padding: 10px 15px;
-  margin-right: 10px;
-  background-color: hsla(160, 100%, 27%, 1);
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #45a049;
 }
 
 .mic-container {
@@ -124,6 +161,7 @@ button:hover {
   border: #444 2px solid;
   border-radius: 5px;
 }
+
 .remote-video {
   width: 80%;
   max-width: 200px;
@@ -132,5 +170,20 @@ button:hover {
   z-index: 0;
   border: #45a049 2px solid;
   border-radius: 5px;
+}
+
+.end-call-btn {
+  margin-top: 10px;
+  min-width: 180px;
+  border: none;
+  background-color: hsla(0, 100%, 50%, 1);
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.end-call-btn:hover {
+  background-color: hsla(0, 100%, 40%, 1);
 }
 </style>
