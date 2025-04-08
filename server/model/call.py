@@ -11,3 +11,7 @@ class CallAnswer(BaseModel):
 class CallIceCandidate(BaseModel):
     caller_id: str
     candidate: dict
+
+class CallEnd(BaseModel):
+    caller_id: str
+    channel_id: str
