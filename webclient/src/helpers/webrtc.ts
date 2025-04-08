@@ -197,3 +197,24 @@ export async function handleIceCandidate(candidate: RTCIceCandidateInit) {
     }
   }
 }
+
+export function endCall() {
+  if (peerConnection.value) {
+    peerConnection.value.close();
+    peerConnection.value = null;
+  }
+
+  if (localStream.value) {
+    localStream.value.getTracks().forEach((track) => track.stop());
+    localStream.value = null;
+  }
+
+  remoteStream.value = null;
+
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  console.log("Call ended and resources cleaned up.");
+}
