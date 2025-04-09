@@ -552,14 +552,21 @@ async def post_message(new_message: NewMessage, channel_id: str, current_user: U
     return message
 
 @app.get("/api/messages/{channel_id}")
-async def get_messages(channel_id: str, current_user: UserDep, session: SessionDep, limit: int = 5):
+async def get_messages(
+    channel_id: str,
+    current_user: UserDep,
+    session: SessionDep,
+    limit: int = 20,
+    before_id: int | None = None,
+):
     channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
     if not channel:
-        raise HTTPException(status_code=404, detail="User not found")
-    return list(session.exec(
-        select(Message).where(Message.channel_id == channel.channel_id)
-        .order_by(Message.id.desc()).limit(limit)
-    ))[::-1]
+        raise HTTPException(status_code=404, detail="Channel not found")
+    query = select(Message).where(Message.channel_id == channel.channel_id)
+    if before_id is not None:
+        query = query.where(Message.id < before_id)
+    query = query.order_by(Message.id.desc()).limit(limit)
+    return list(session.exec(query))[::-1]
 
 @app.get("/api/opened_chat/all")
 async def get_opened_chats(current_user:UserDep, session: SessionDep) -> list[OpenedChatResponse]:
