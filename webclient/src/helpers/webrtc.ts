@@ -67,6 +67,9 @@ export async function initPeerConnection(
     }
     remoteStream.value.addTrack(event.track);
     console.log("Received remote track:", event.track);
+    if (event.track.kind === "audio") {
+      startRemoteMicVisualization(remoteStream.value!);
+    }
   };
 
   console.log("Initialized peer connection:", peerConnection.value);
@@ -217,4 +220,24 @@ export function endCall() {
   }
 
   console.log("Call ended and resources cleaned up.");
+}
+
+export function startRemoteMicVisualization(stream: MediaStream) {
+  const remoteAudioContext = new (window.AudioContext ||
+    (window as any).webkitAudioContext)();
+  const source = remoteAudioContext.createMediaStreamSource(stream);
+  const analyserNode = remoteAudioContext.createAnalyser();
+  analyserNode.fftSize = 256;
+  source.connect(analyserNode);
+
+  const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+  function updateRemoteMicLevel() {
+    analyserNode.getByteFrequencyData(dataArray);
+    remoteMicLevel.value = Math.max(...dataArray) / 255;
+
+    requestAnimationFrame(updateRemoteMicLevel);
+  }
+
+  updateRemoteMicLevel();
 }
