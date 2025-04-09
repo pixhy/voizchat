@@ -21,7 +21,7 @@ from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
-from model.call import CallInvite, CallAnswer, CallIceCandidate
+from model.call import CallEnd, CallInvite, CallAnswer, CallIceCandidate
 
 import logging
 #logging.basicConfig()
@@ -257,6 +257,18 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDep):
                         CallAnswer(caller_id=str(current_user.userid), answer=answer),
                         current_user
                     )
+            elif cmd == "call-end":
+                channel_id = data.get("channel_id")
+                channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()
+                
+                if channel:
+                    await manager.broadcast_to_channel(
+                        session,
+                        channel,
+                        "call-end",
+                        CallEnd(caller_id=str(current_user.userid), channel_id=channel_id),
+                        current_user
+                        )
             elif cmd == "call-ice-candidate":
                 channel_id = data.get("channel_id")
                 channel = session.exec(select(Channel).where(Channel.channel_id == channel_id)).first()

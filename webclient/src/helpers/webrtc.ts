@@ -67,6 +67,9 @@ export async function initPeerConnection(
     }
     remoteStream.value.addTrack(event.track);
     console.log("Received remote track:", event.track);
+    if (event.track.kind === "audio") {
+      startRemoteMicVisualization(remoteStream.value!);
+    }
   };
 
   console.log("Initialized peer connection:", peerConnection.value);
@@ -196,4 +199,45 @@ export async function handleIceCandidate(candidate: RTCIceCandidateInit) {
       pendingCandidates.push(candidate);
     }
   }
+}
+
+export function endCall() {
+  if (peerConnection.value) {
+    peerConnection.value.close();
+    peerConnection.value = null;
+  }
+
+  if (localStream.value) {
+    localStream.value.getTracks().forEach((track) => track.stop());
+    localStream.value = null;
+  }
+
+  remoteStream.value = null;
+
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  console.log("Call ended and resources cleaned up.");
+}
+
+export function startRemoteMicVisualization(stream: MediaStream) {
+  const remoteAudioContext = new (window.AudioContext ||
+    (window as any).webkitAudioContext)();
+  const source = remoteAudioContext.createMediaStreamSource(stream);
+  const analyserNode = remoteAudioContext.createAnalyser();
+  analyserNode.fftSize = 256;
+  source.connect(analyserNode);
+
+  const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+  function updateRemoteMicLevel() {
+    analyserNode.getByteFrequencyData(dataArray);
+    remoteMicLevel.value = Math.max(...dataArray) / 255;
+
+    requestAnimationFrame(updateRemoteMicLevel);
+  }
+
+  updateRemoteMicLevel();
 }

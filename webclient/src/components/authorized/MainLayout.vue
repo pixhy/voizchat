@@ -28,6 +28,7 @@ import {
   handleOffer,
   handleAnswer,
   handleIceCandidate,
+  endCall,
 } from "@/helpers/webrtc";
 const authStore = useAuthStore();
 let conversationsStore = useConversationsStore();
@@ -38,6 +39,7 @@ let ws: WebSocket | null = null;
 const activateWhiteboard = ref<boolean>(false);
 const isCalling = ref<boolean>(false);
 const incomingCall = ref<boolean>(false);
+const outGoingCall = ref<boolean>(false);
 const incomingOffer = ref<RTCSessionDescriptionInit | null>(null);
 
 function getChannelId() {
@@ -113,9 +115,16 @@ function openWebsocket() {
       console.log("handleOffer function:", handleOffer);
       incomingOffer.value = messageObj.data.offer;
       incomingCall.value = true;
-      //handleOffer(messageObj.data.offer, getChannelId(), sendWebsocketCommand);
     } else if (messageObj.cmd === "call-answer") {
       handleAnswer(messageObj.data.answer);
+      outGoingCall.value = false;
+    } else if (messageObj.cmd === "call-end") {
+      console.log("Call ended by remote peer");
+      endCall();
+      isCalling.value = false;
+      incomingCall.value = false;
+      incomingOffer.value = null;
+      isCalling.value = false;
     } else if (messageObj.type === "call-ice-candidate") {
       handleIceCandidate(messageObj.data.candidate);
     }
@@ -177,6 +186,7 @@ provide("setWhiteBoardHandler", (h: DrawHandler) => {
 async function handleCall() {
   startCall(getChannelId(), sendWebsocketCommand);
   isCalling.value = true;
+  outGoingCall.value = true;
   console.log("handleCall ");
 }
 
@@ -184,6 +194,7 @@ function acceptCall() {
   console.log("Call accepted");
   incomingCall.value = false;
   isCalling.value = true;
+  outGoingCall.value = false;
 
   if (incomingOffer.value) {
     handleOffer(incomingOffer.value, getChannelId(), sendWebsocketCommand);
@@ -194,8 +205,19 @@ function acceptCall() {
 
 function rejectCall() {
   console.log("Call rejected");
+
+  sendWebsocketCommand("call-end", {
+    channel_id: getChannelId(),
+  });
+
   incomingCall.value = false;
   incomingOffer.value = null;
+  isCalling.value = false;
+}
+
+function handleEndCall() {
+  sendWebsocketCommand("call-end", { channel_id: getChannelId() });
+  endCall();
   isCalling.value = false;
 }
 
@@ -299,7 +321,11 @@ async function closeButton(channelId: string) {
           </button>
         </div>
       </div>
-      <Call v-if="isCalling" />
+      <Call
+        v-if="isCalling"
+        :outGoingCall="outGoingCall"
+        @endCall="handleEndCall"
+      />
       <button v-on:click="authStore.logout" class="logout-btn">Logout</button>
     </div>
   </div>
@@ -311,6 +337,7 @@ async function closeButton(channelId: string) {
 .start-call-btn {
   margin-top: 10px;
   border: none;
+  min-width: 180px;
   background-color: hsla(160, 100%, 37%, 1);
   color: white;
   padding: 10px;
