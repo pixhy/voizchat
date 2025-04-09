@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, onUpdated, inject } from "vue";
+import { onMounted, onUnmounted, onUpdated, inject, nextTick } from "vue";
 import { useRoute, onBeforeRouteUpdate } from "vue-router";
 import { getMe, type User } from "@/helpers/users";
 import { ref, watch } from "vue";
@@ -48,8 +48,32 @@ const loaded = ref<boolean>(false);
 let needScrollToBottom = true;
 
 const bottomElement = ref<HTMLElement | null>(null);
+const chatMessagesRef = ref<HTMLElement | null>(null);
+const loadingOlderMessages = ref<boolean>(false);
 
 let me: User | null = null;
+
+async function handleScroll() {
+  const el = chatMessagesRef.value;
+  if (!el) return;
+
+  const scrollTopBefore = el.scrollTop;
+  if (scrollTopBefore < 50) {
+    const previousHeight = el.scrollHeight;
+
+    await loadOlderMessages();
+    await nextTick();
+
+    const scrollTopAfter = el.scrollTop;
+    const newHeight = el.scrollHeight;
+
+    const userScrolledAway = Math.abs(scrollTopAfter - scrollTopBefore) > 100;
+    if (!userScrolledAway) {
+      el.scrollTop = newHeight - previousHeight;
+    }
+  }
+}
+
 
 onBeforeRouteUpdate(async (to, from) => {
   console.log("onBeforeRouteUpdate", from, to);
@@ -74,10 +98,16 @@ onMounted(async () => {
   if (eventBus.showWhiteboard !== undefined) {
     showWhiteBoard.value = eventBus.showWhiteboard;
   }
+  if (chatMessagesRef.value) {
+    chatMessagesRef.value.addEventListener("scroll", handleScroll);
+  }
 });
 
 onUnmounted(async () => {
   setMessageHandler(null);
+  if (chatMessagesRef.value) {
+    chatMessagesRef.value.removeEventListener("scroll", handleScroll);
+  }
 });
 
 async function loadMessages() {
@@ -105,6 +135,29 @@ async function loadMessages() {
   chatInfo.value.unread_count = 0;
 
   loaded.value = true;
+}
+
+async function loadOlderMessages() {
+  if (
+    loadingOlderMessages.value ||
+    !messages.value ||
+    messages.value.length === 0
+  )
+    return;
+
+  loadingOlderMessages.value = true;
+
+  const firstMessageId = messages.value[0].id;
+
+  const messagesResponse = await fetchWrapper.get(
+    `/api/messages/${channelId}?limit=20&before_id=${firstMessageId}`
+  );
+
+  if (messagesResponse.success) {
+    messages.value = [...messagesResponse.value, ...messages.value];
+  }
+
+  loadingOlderMessages.value = false;
 }
 
 onUpdated(() => {
@@ -174,7 +227,7 @@ function convertDateToString(timestamp: number): string {
   <div class="channel-container">
     <div v-if="chatInfo">chat with {{ chatInfo.users[0].username }}</div>
     <Whiteboard v-if="showWhiteBoard" />
-    <div class="chat-messages" v-if="loaded">
+    <div class="chat-messages" ref="chatMessagesRef" v-if="loaded">
       <div class="message" v-for="(msg, index) in messages" :key="index">
         <div class="message-header">
           <img src="@/assets/default.png" alt="User Avatar" class="avatar" />
@@ -202,9 +255,6 @@ function convertDateToString(timestamp: number): string {
         class="input-field"
       />
       <button v-on:click="sendMessage" class="send-button">Send</button>
-      <!-- <button v-on:click="showWhiteBoard = !showWhiteBoard" class="send-button">
-        Whiteboard
-      </button> -->
     </div>
   </div>
 </template>
