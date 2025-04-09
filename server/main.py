@@ -21,7 +21,7 @@ from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
 from model.whiteboard import WhiteboardDrawData
 from dotenv import load_dotenv
-from model.call import CallInvite, CallAnswer, CallIceCandidate
+from model.call import CallEnd, CallInvite, CallAnswer, CallIceCandidate
 
 import logging
 #logging.basicConfig()

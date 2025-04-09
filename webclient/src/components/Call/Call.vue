@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import {
   remoteStream,
   peerConnection,
@@ -9,7 +9,9 @@ import {
   localVideo,
   remoteVideo,
   endCall,
+  remoteMicLevel,
 } from "@/helpers/webrtc";
+import { Mic, MicOff, Video, VideoOff, Headphones } from "lucide-vue-next";
 
 defineProps<{
   outGoingCall: boolean;
@@ -42,10 +44,37 @@ onUnmounted(() => {
   }
   endCall();
 });
+
+const isMicMuted = ref(false);
+const isVideoOff = ref(false);
+const isRemoteMuted = ref(false);
+
+function toggleMic() {
+  const track = localStream.value?.getAudioTracks()[0];
+  if (track) {
+    track.enabled = !track.enabled;
+    isMicMuted.value = !track.enabled;
+  }
+}
+
+function toggleVideo() {
+  const track = localStream.value?.getVideoTracks()[0];
+  if (track) {
+    track.enabled = !track.enabled;
+    isVideoOff.value = !track.enabled;
+  }
+}
+
+function toggleRemoteAudio() {
+  if (remoteVideo.value) {
+    remoteVideo.value.muted = !remoteVideo.value.muted;
+    isRemoteMuted.value = remoteVideo.value.muted;
+  }
+}
 </script>
 
 <template>
-  <div lass="call-container">
+  <div class="call-container">
     <div class="call-header">
       <h2 v-if="!outGoingCall">Call in Progress</h2>
       <h2 v-else>
@@ -63,9 +92,41 @@ onUnmounted(() => {
     <video ref="remoteVideo" class="remote-video" autoplay playsinline></video>
 
     <div class="mic-container">
-      <div class="mic-bar" :style="{ width: micLevel * 100 + '%' }"></div>
+      <span class="local-mic-test">Local Mic Level</span>
+      <div class="mic-bar-background">
+        <div class="mic-bar" :style="{ width: micLevel * 100 + '%' }"></div>
+      </div>
+      <span class="local-mic-test">Remote Mic Level</span>
+      <div class="mic-bar-background">
+        <div
+          class="mic-bar"
+          :style="{ width: remoteMicLevel * 100 + '%' }"
+        ></div>
+      </div>
     </div>
 
+    <div class="call-controls">
+      <button
+        @click="toggleMic"
+        :class="['icon-btn', isMicMuted ? 'muted' : 'active']"
+      >
+        <component :is="isMicMuted ? MicOff : Mic" />
+      </button>
+
+      <button
+        @click="toggleRemoteAudio"
+        :class="['icon-btn', isRemoteMuted ? 'muted' : 'active']"
+      >
+        <Headphones />
+      </button>
+
+      <button
+        @click="toggleVideo"
+        :class="['icon-btn', isVideoOff ? 'muted' : 'active']"
+      >
+        <component :is="isVideoOff ? VideoOff : Video" />
+      </button>
+    </div>
     <button @click="$emit('endCall')" class="end-call-btn">End Call</button>
   </div>
 </template>
@@ -122,17 +183,29 @@ onUnmounted(() => {
   margin-top: 10px;
 }
 
+.local-mic-test {
+  color: #fff;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
 .mic-container {
+  display: flex;
+  flex-direction: column;
+  margin-top: 5px;
   width: 150px;
+  margin-top: 10px;
+}
+
+.mic-bar-background {
+  width: 100%;
   height: 10px;
   background: #ddd;
   border-radius: 5px;
   overflow: hidden;
-  margin-top: 10px;
 }
-
 .mic-bar {
-  height: 100%;
+  height: 10px;
   background: limegreen;
   transition: width 0.1s ease-out;
 }
@@ -161,7 +234,6 @@ onUnmounted(() => {
   border: #444 2px solid;
   border-radius: 5px;
 }
-
 .remote-video {
   width: 80%;
   max-width: 200px;
@@ -185,5 +257,48 @@ onUnmounted(() => {
 
 .end-call-btn:hover {
   background-color: hsla(0, 100%, 40%, 1);
+}
+
+.call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.icon-btn {
+  width: 60px;
+  height: 40px;
+  display: flex;
+  border: none;
+  justify-content: center;
+  align-items: center;
+}
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-btn.active {
+  color: #45a049;
+  background-color: transparent;
+  transition: all 0.3s ease;
+}
+
+.icon-btn.muted {
+  color: red;
+  background-color: transparent;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.icon-btn.muted::after {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 24px;
+  background-color: red;
+  transform: rotate(45deg);
 }
 </style>

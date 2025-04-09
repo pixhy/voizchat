@@ -122,6 +122,9 @@ function openWebsocket() {
       console.log("Call ended by remote peer");
       endCall();
       isCalling.value = false;
+      incomingCall.value = false;
+      incomingOffer.value = null;
+      isCalling.value = false;
     } else if (messageObj.type === "call-ice-candidate") {
       handleIceCandidate(messageObj.data.candidate);
     }
@@ -191,6 +194,7 @@ function acceptCall() {
   console.log("Call accepted");
   incomingCall.value = false;
   isCalling.value = true;
+  outGoingCall.value = false;
 
   if (incomingOffer.value) {
     handleOffer(incomingOffer.value, getChannelId(), sendWebsocketCommand);
@@ -201,6 +205,11 @@ function acceptCall() {
 
 function rejectCall() {
   console.log("Call rejected");
+
+  sendWebsocketCommand("call-end", {
+    channel_id: getChannelId(),
+  });
+
   incomingCall.value = false;
   incomingOffer.value = null;
   isCalling.value = false;
@@ -328,6 +337,7 @@ async function closeButton(channelId: string) {
 .start-call-btn {
   margin-top: 10px;
   border: none;
+  min-width: 180px;
   background-color: hsla(160, 100%, 37%, 1);
   color: white;
   padding: 10px;
