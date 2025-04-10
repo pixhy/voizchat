@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import AuthDialog from './AuthDialog.vue'
-import { RouterLink } from 'vue-router'
-import { defineComponent } from 'vue'
-</script>
-<script lang="ts">
+import { ref } from 'vue'
+import { fetchWrapper } from '@/helpers/fetch-wrapper'
 
-export default defineComponent({
-  data() {
-    return {
-      email: '',
-    };
-  },
-  methods: {
-    handleLogin() {
-      console.log('Logging in with', this.email);
-    },
-  },
-});
+const email = ref('')
+const message = ref('')
+const isSuccess = ref(false)
 
+const handleLogin = async () => {
+  message.value = ''
+  isSuccess.value = false
+  const response = await fetchWrapper.post('/api/users/request-password-reset', {
+    email: email.value,
+  })
+
+  if (!response.success) {
+    message.value = response.error.message
+  } else {
+    message.value = 'Recovery email sent! Please check your inbox.'
+    isSuccess.value = true
+  }
+}
 </script>
 
 <template>
@@ -25,8 +28,9 @@ export default defineComponent({
     <template #form>
       <form @submit.prevent="handleLogin" class="auth-form">
         <p class="forgot-pw">
-            Forgot your account’s password? Enter your email address and we’ll send you a recovery link.
+          Forgot your account’s password? Enter your email address and we’ll send you a recovery link.
         </p>
+
         <div class="form-group">
           <label for="email">E-Mail address:</label>
           <input
@@ -38,6 +42,11 @@ export default defineComponent({
             class="auth-input"
           />
         </div>
+
+        <div v-if="message" :style="{ color: isSuccess ? 'lightgreen' : 'red', marginBottom: '1rem' }">
+          {{ message }}
+        </div>
+
         <button type="submit" class="auth-button">Send recovery email</button>
       </form>
     </template>
