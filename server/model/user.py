@@ -12,7 +12,8 @@ class User(SQLModel, table=True):
     is_verified: bool = False
     verification_code: str | None = None
     verification_code_expiration: int | None = None
-
+    reset_password_token: str | None = None
+    reset_password_token_expiration: int | None = None
 class CreateUserRequest(BaseModel):
     email: str
     username: str
@@ -35,3 +36,11 @@ class UserInfo(BaseModel):
     @staticmethod
     def from_user(user: User):
         return UserInfo(userid=str(user.userid), username=user.username)
+
+class RequestPasswordResetBody(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
