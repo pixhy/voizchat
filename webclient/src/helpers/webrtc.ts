@@ -31,10 +31,25 @@ export async function initPeerConnection(
   }
 
   // ✅ Add local media
-  localStream.value = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: true,
-  });
+  try {
+    localStream.value = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true,
+    });
+  } catch (error) {
+    console.warn("Error accessing media devices:", error);
+    try {
+      localStream.value = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+    } catch (error) {
+      console.error("Error accessing audio devices:", error);
+      alert(
+        "Unable to access audio devices. Please check your microphone settings."
+      );
+      return;
+    }
+  }
 
   localStream.value.getTracks().forEach((track) => {
     peerConnection.value?.addTrack(track, localStream.value!);
