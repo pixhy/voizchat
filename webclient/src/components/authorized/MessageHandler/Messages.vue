@@ -49,17 +49,28 @@ let needScrollToBottom = true;
 
 const bottomElement = ref<HTMLElement | null>(null);
 const chatMessagesRef = ref<HTMLElement | null>(null);
+const loadingOlderMessages = ref<boolean>(false);
 
 let me: User | null = null;
 
 async function handleScroll() {
   const el = chatMessagesRef.value;
-  if (el && el.scrollTop === 0) {
+  if (!el) return;
+
+  const scrollTopBefore = el.scrollTop;
+  if (scrollTopBefore < 50) {
     const previousHeight = el.scrollHeight;
+
     await loadOlderMessages();
     await nextTick();
+
+    const scrollTopAfter = el.scrollTop;
     const newHeight = el.scrollHeight;
-    el.scrollTop = newHeight - previousHeight;
+
+    const userScrolledAway = Math.abs(scrollTopAfter - scrollTopBefore) > 100;
+    if (!userScrolledAway) {
+      el.scrollTop = newHeight - previousHeight;
+    }
   }
 }
 
@@ -126,15 +137,26 @@ async function loadMessages() {
 }
 
 async function loadOlderMessages() {
-  if (!messages.value || messages.value.length === 0) return;
+  if (
+    loadingOlderMessages.value ||
+    !messages.value ||
+    messages.value.length === 0
+  )
+    return;
+
+  loadingOlderMessages.value = true;
+
   const firstMessageId = messages.value[0].id;
 
   const messagesResponse = await fetchWrapper.get(
     `/api/messages/${channelId}?limit=20&before_id=${firstMessageId}`
   );
+
   if (messagesResponse.success) {
-    messages.value = [...messagesResponse.value, ...(messages.value || [])];
+    messages.value = [...messagesResponse.value, ...messages.value];
   }
+
+  loadingOlderMessages.value = false;
 }
 
 onUpdated(() => {
@@ -232,9 +254,6 @@ function convertDateToString(timestamp: number): string {
         class="input-field"
       />
       <button v-on:click="sendMessage" class="send-button">Send</button>
-      <!-- <button v-on:click="showWhiteBoard = !showWhiteBoard" class="send-button">
-        Whiteboard
-      </button> -->
     </div>
   </div>
 </template>

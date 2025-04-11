@@ -12,10 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 from enum import Enum
 
-from email_service import send_verification_email
+from email_service import send_verification_email, send_recovery_email
 from model.opened_chat import OpenedChat, OpenedChatResponse
 from services.websocket_manager import ConnectionManager
-from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo
+from model.user import User, CreateUserRequest, PrivateUserInfo, LoginRequest, UserInfo, RequestPasswordResetBody, ResetPasswordRequest
 from model.friend_list import FriendListEntry, FriendStateUpdate
 from model.message import Message, NewMessage
 from model.channels import Channel, ChannelUser, ChannelType
@@ -353,6 +353,39 @@ def login_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], sess
     payload = {"uid": user.id, "exp": expiration}
     token = jwt.encode(payload, jwt_private_key, algorithm="EdDSA")
     return jsonable_encoder({"access_token": token, "token_type": "bearer"})
+
+@app.post("/api/users/request-password-reset")
+def request_password_reset(data: RequestPasswordResetBody, session: SessionDep):
+    user = session.exec(select(User).where(User.email == data.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.reset_password_token = os.urandom(20).hex()
+    user.reset_password_token_expiration = int(time.time()) + 60 * 15
+    send_recovery_email(user.email, user.reset_password_token)
+    session.commit()
+
+    return {"message": "Reset email sent."}
+
+@app.post("/api/users/reset-password")
+def reset_password(data: ResetPasswordRequest, session: SessionDep):
+    user = session.exec(select(User).where(User.email == data.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if (
+        user.reset_password_token != data.code or
+        user.reset_password_token_expiration is None or
+        user.reset_password_token_expiration < int(time.time())
+    ):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.passwordhash = hash_password(data.new_password)
+    user.reset_password_token = None
+    user.reset_password_token_expiration = None
+    session.commit()
+
+    return {"success": True, "message": "Password reset successfully."}
 
 @app.get("/api/users/")
 def read_users(

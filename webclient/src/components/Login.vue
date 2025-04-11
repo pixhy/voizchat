@@ -55,7 +55,7 @@ const handleLogin = async () => {
           </div>
         </div>
 
-        <a href="#" class="forgot-password">Forgotten password?</a>
+        <a href="/account-recovery" class="forgot-password">Forgotten password?</a>
 
         <button type="submit" class="auth-button">Log in</button>
 

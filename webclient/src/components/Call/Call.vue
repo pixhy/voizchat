@@ -9,6 +9,7 @@ import {
   localVideo,
   remoteVideo,
   endCall,
+  remoteMicLevel,
 } from "@/helpers/webrtc";
 import { Mic, MicOff, Video, VideoOff, Headphones } from "lucide-vue-next";
 
@@ -94,6 +95,13 @@ function toggleRemoteAudio() {
       <span class="local-mic-test">Local Mic Level</span>
       <div class="mic-bar-background">
         <div class="mic-bar" :style="{ width: micLevel * 100 + '%' }"></div>
+      </div>
+      <span class="local-mic-test">Remote Mic Level</span>
+      <div class="mic-bar-background">
+        <div
+          class="mic-bar"
+          :style="{ width: remoteMicLevel * 100 + '%' }"
+        ></div>
       </div>
     </div>
 

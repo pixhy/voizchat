@@ -122,6 +122,9 @@ function openWebsocket() {
       console.log("Call ended by remote peer");
       endCall();
       isCalling.value = false;
+      incomingCall.value = false;
+      incomingOffer.value = null;
+      isCalling.value = false;
     } else if (messageObj.type === "call-ice-candidate") {
       handleIceCandidate(messageObj.data.candidate);
     }

@@ -30,6 +30,21 @@ const router = createRouter({
       component: () => import('../components/VerifyCode.vue'),
     },
     {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../components/ResetPassword.vue'),
+      beforeEnter: (to, from, next) => {
+        const email = to.query.email
+        const code = to.query.code
+    
+        if (email && code) {
+          next()
+        } else {
+          next({ name: 'account-recovery' })
+        }
+      }
+    },
+    {
       path: '/',
       name: 'main',
       beforeEnter: (to, from, next) => { 

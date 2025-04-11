@@ -34,3 +34,8 @@ def send_verification_email(receiver_email, verification_code):
     subject = "Verification Code"
     body = f"Your verification code is: {webclient_base_url}/verify/{verification_code}"
     send_email(receiver_email, subject, body)
+
+def send_recovery_email(receiver_email, verification_code):
+    subject = "Password Recovery Code"
+    body = f"Click on this link to reset your password: {webclient_base_url}/reset-password?email={receiver_email}&code={verification_code}"
+    send_email(receiver_email, subject, body)
