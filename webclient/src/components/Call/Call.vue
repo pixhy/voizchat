@@ -21,6 +21,10 @@ onMounted(async () => {
   watch(localStream, (stream) => {
     if (localVideo.value && stream) {
       localVideo.value.srcObject = stream;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = false;
+      }
     }
   });
 
@@ -46,7 +50,7 @@ onUnmounted(() => {
 });
 
 const isMicMuted = ref(false);
-const isVideoOff = ref(false);
+const isVideoOff = ref(true);
 const isRemoteMuted = ref(false);
 
 function toggleMic() {
