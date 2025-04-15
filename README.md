@@ -9,17 +9,17 @@ Voizchat is a real-time communication platform that enables users to connect wit
 - **Whiteboard**: Collaborate using an interactive whiteboard.
 
 ## Tech Stack
-- **Frontend**: ![Vue.js (TypeScript)](https://img.shields.io/badge/Vue.js%20(TypeScript)-35495E?style=for-the-badge&logo=vue.js&logoColor=4FC08D)
-- **Backend**: ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-- **Database**: ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
-- **Containerization**: ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+- **Frontend**: [![Vue.js (TypeScript)](https://img.shields.io/badge/Vue.js%20(TypeScript)-35495E?style=for-the-badge&logo=vue.js&logoColor=4FC08D)](https://vuejs.org/)
+- **Backend**: [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+- **Database**: [![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/index.html)
+- **Containerization**: [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
 ## Installation
 
 ### Prerequisites
 Ensure you have the following installed on your system:
-- ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-- ![Docker Compose](https://img.shields.io/badge/Docker--Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+- [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+- [![Docker Compose](https://img.shields.io/badge/Docker--Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
 ### Setup
 1. Clone the repository:
