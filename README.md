@@ -52,7 +52,7 @@ Ensure you have the following installed on your system:
 2. Start the backend:
    ```sh
    cd server
-   pyhton -m venv venv
+   python -m venv .venv
    venv\Scipts\active # Windows
    source venv/bin/active # Linux/Mac
    pip install -r requirements.txt
@@ -66,13 +66,13 @@ Ensure you have the following installed on your system:
    ```
 4. Open the app in your browser:
    ```sh
-   http://localhost:3000
+   http://localhost:5173
    ```
 
 ## Usage
 - Register and log in to your account.
 - Add friends and start messaging them.
-- Initiate voice calls for real-time conversations.
+- Initiate voice and video calls for real-time conversations.
 - Use the whiteboard for collaboration.
 
 ## Contributing
@@ -81,7 +81,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 ## Contact
 For any inquiries or support, feel free to reach out via the repository’s issue tracker.
 
-## Develpoers
+## Developers
 Voizchat is developed and maintained by:
 
 - **[pixhy](https://github.com/pixhy)**  
